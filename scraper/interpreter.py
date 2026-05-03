@@ -12,6 +12,7 @@ from typing import Optional, Union
 from .gpScraper import GpScrapeResult, CommitNode
 
 _CONDITION_RE = re.compile(r'^(?:if|elif|while)\s+(.+?):\s*$', re.DOTALL)
+_CHECK_KW_RE = re.compile(r'^\s*(if|elif|else)\b')
 _MAX_LOOP_ITERATIONS = 10_000
 
 
@@ -37,12 +38,25 @@ class LoopNode:
     body: list["ExecNode"] = field(default_factory=list)
 
 
-ExecNode = Union[StatementNode, IfNode, LoopNode]
+@dataclass
+class CheckChainNode:
+    lines: list[str]
+
+
+ExecNode = Union[StatementNode, IfNode, LoopNode, CheckChainNode]
 
 
 # ---------------------------------------------------------------------------
 # Tree builder
 # ---------------------------------------------------------------------------
+
+def _check_branch_keyword(commits: list[CommitNode]) -> str:
+    """Return 'if', 'elif', 'else', or 'other' based on the first commit message."""
+    if not commits:
+        return "other"
+    m = _CHECK_KW_RE.match(commits[0].message.strip())
+    return m.group(1) if m else "other"
+
 
 def _build_sha_to_branch(by_branch: dict[str, list[CommitNode]]) -> dict[str, str]:
     return {c.sha: branch for branch, commits in by_branch.items() for c in commits}
@@ -109,9 +123,27 @@ def _build_exec_nodes(
                 nodes.append(LoopNode(condition, body))
 
         elif prefix == "check":
-            # Inline one-liner statements (e.g. "if i % 3 == 0: print('Fizz')")
-            for cc in by_branch.get(merged, []):
-                nodes.append(StatementNode(cc))
+            branch_commits = by_branch.get(merged, [])
+            kw = _check_branch_keyword(branch_commits)
+
+            if kw == "if":
+                chain_lines = [cc.message.strip() for cc in branch_commits]
+                while i + 1 < len(commits) and commits[i + 1].is_merge:
+                    next_merged = _find_merged_branch(commits[i + 1], current_branch, sha_to_branch)
+                    if not next_merged or next_merged.split("/")[0] != "check":
+                        break
+                    next_commits = by_branch.get(next_merged, [])
+                    next_kw = _check_branch_keyword(next_commits)
+                    if next_kw not in ("elif", "else"):
+                        break
+                    chain_lines.extend(cc.message.strip() for cc in next_commits)
+                    i += 1
+                    if next_kw == "else":
+                        break
+                nodes.append(CheckChainNode(chain_lines))
+            else:
+                for cc in branch_commits:
+                    nodes.append(StatementNode(cc))
 
         # fn/, stash, and other constructs are out of scope for this section
 
@@ -172,6 +204,15 @@ def _execute(nodes: list[ExecNode], scope: dict) -> None:
                 except Exception:
                     break
                 _execute(node.body, scope)
+
+        elif isinstance(node, CheckChainNode):
+            code = "\n".join(node.lines)
+            try:
+                exec(code, scope)  # noqa: S102
+            except SyntaxError:
+                pass
+            except Exception:
+                pass
 
 
 def run(result: GpScrapeResult, scope: Optional[dict] = None) -> dict:

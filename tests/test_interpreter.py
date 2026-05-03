@@ -15,6 +15,7 @@ from scraper.interpreter import (
     StatementNode,
     IfNode,
     LoopNode,
+    CheckChainNode,
 )
 
 
@@ -223,3 +224,54 @@ class TestRun:
         ]
         run(_result(commits))
         assert capsys.readouterr().out.strip() == "hello world"
+
+
+class TestCheckChain:
+    # Builds an if/elif/.../else chain using consecutive check/ merges.
+    # Each check/ branch holds a single one-liner commit.
+    # main: c1 → merge(check/a) → merge(check/b) → merge(check/c) → merge(check/d)
+
+    def _fizz_commits(self, i_val):
+        c1 = _commit("c1", f"i = {i_val}", "main")
+        c2 = _commit("c2", "if i % 15 == 0: result = 'FizzBuzz'", "check/a", ["c1"])
+        c3 = _commit("c3", "elif i % 3 == 0: result = 'Fizz'", "check/b", ["c1"])
+        c4 = _commit("c4", "elif i % 5 == 0: result = 'Buzz'", "check/c", ["c1"])
+        c5 = _commit("c5", "else: result = str(i)", "check/d", ["c1"])
+        m1 = _commit("m1", "Merge check/a", "main", ["c1", "c2"], is_merge=True)
+        m2 = _commit("m2", "Merge check/b", "main", ["m1", "c3"], is_merge=True)
+        m3 = _commit("m3", "Merge check/c", "main", ["m2", "c4"], is_merge=True)
+        m4 = _commit("m4", "Merge check/d", "main", ["m3", "c5"], is_merge=True)
+        return [c1, c2, c3, c4, c5, m1, m2, m3, m4]
+
+    def test_tree_produces_check_chain_node(self):
+        tree = build_exec_tree(_result(self._fizz_commits(15)))
+        assert len(tree) == 2
+        assert isinstance(tree[0], StatementNode)
+        assert isinstance(tree[1], CheckChainNode)
+        assert len(tree[1].lines) == 4
+
+    def test_if_branch_taken(self):
+        scope = run(_result(self._fizz_commits(15)))
+        assert scope["result"] == "FizzBuzz"
+
+    def test_first_elif_branch_taken(self):
+        scope = run(_result(self._fizz_commits(3)))
+        assert scope["result"] == "Fizz"
+
+    def test_second_elif_branch_taken(self):
+        scope = run(_result(self._fizz_commits(5)))
+        assert scope["result"] == "Buzz"
+
+    def test_else_branch_taken(self):
+        scope = run(_result(self._fizz_commits(7)))
+        assert scope["result"] == "7"
+
+    def test_if_elif_without_else(self):
+        # Chain with no else — no match leaves variable unset
+        c1 = _commit("c1", "i = 7", "main")
+        c2 = _commit("c2", "if i % 3 == 0: result = 'Fizz'", "check/a", ["c1"])
+        c3 = _commit("c3", "elif i % 5 == 0: result = 'Buzz'", "check/b", ["c1"])
+        m1 = _commit("m1", "Merge check/a", "main", ["c1", "c2"], is_merge=True)
+        m2 = _commit("m2", "Merge check/b", "main", ["m1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, m1, m2]))
+        assert "result" not in scope
