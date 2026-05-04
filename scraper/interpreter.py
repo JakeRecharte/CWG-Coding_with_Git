@@ -2,14 +2,14 @@
 CWG interpreter — branch control-flow engine.
 
 Consumes a GpScrapeResult and executes the CWG program encoded in git history.
-Supported constructs: statements, if/else blocks, while loops, check/ inlines.
+Supported constructs: statements, if/else blocks, while loops, check/ inlines, fn/ calls.
 """
 
 import re
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
-from .gpScraper import GpScrapeResult, CommitNode
+from .gpScraper import GpScrapeResult, CommitNode, FunctionDef
 
 _CONDITION_RE = re.compile(r'^(?:if|elif|while)\s+(.+?):\s*$', re.DOTALL)
 _CHECK_KW_RE = re.compile(r'^\s*(if|elif|else)\b')
@@ -43,7 +43,13 @@ class CheckChainNode:
     lines: list[str]
 
 
-ExecNode = Union[StatementNode, IfNode, LoopNode, CheckChainNode]
+@dataclass
+class FnCallNode:
+    name: str
+    body: list[CommitNode]
+
+
+ExecNode = Union[StatementNode, IfNode, LoopNode, CheckChainNode, FnCallNode]
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +84,8 @@ def _build_exec_nodes(
     commits: list[CommitNode],
     by_branch: dict[str, list[CommitNode]],
     sha_to_branch: dict[str, str],
+    sha_to_commit: dict[str, CommitNode],
+    fn_by_start: dict[str, FunctionDef],
 ) -> list[ExecNode]:
     nodes: list[ExecNode] = []
     i = 0
@@ -86,7 +94,12 @@ def _build_exec_nodes(
         commit = commits[i]
 
         if not commit.is_merge:
-            nodes.append(StatementNode(commit))
+            if commit.is_cherry_pick and commit.cherry_pick_src in fn_by_start:
+                fn_def = fn_by_start[commit.cherry_pick_src]
+                body = [sha_to_commit[s] for s in fn_def.body_shas if s in sha_to_commit]
+                nodes.append(FnCallNode(fn_def.name, body))
+            else:
+                nodes.append(StatementNode(commit))
             i += 1
             continue
 
@@ -102,14 +115,14 @@ def _build_exec_nodes(
         if prefix == "if":
             if_commits = by_branch.get(merged, [])
             condition = if_commits[0] if if_commits else None
-            true_body = _build_exec_nodes(if_commits[1:], by_branch, sha_to_branch)
+            true_body = _build_exec_nodes(if_commits[1:], by_branch, sha_to_branch, sha_to_commit, fn_by_start)
 
             false_body: list[ExecNode] = []
             if i + 1 < len(commits) and commits[i + 1].is_merge:
                 next_merged = _find_merged_branch(commits[i + 1], current_branch, sha_to_branch)
                 if next_merged and next_merged.split("/")[0] == "else":
                     else_commits = by_branch.get(next_merged, [])
-                    false_body = _build_exec_nodes(else_commits, by_branch, sha_to_branch)
+                    false_body = _build_exec_nodes(else_commits, by_branch, sha_to_branch, sha_to_commit, fn_by_start)
                     i += 1  # consume the else merge commit
 
             if condition:
@@ -118,7 +131,7 @@ def _build_exec_nodes(
         elif prefix == "loop":
             loop_commits = by_branch.get(merged, [])
             condition = loop_commits[0] if loop_commits else None
-            body = _build_exec_nodes(loop_commits[1:], by_branch, sha_to_branch)
+            body = _build_exec_nodes(loop_commits[1:], by_branch, sha_to_branch, sha_to_commit, fn_by_start)
             if condition:
                 nodes.append(LoopNode(condition, body))
 
@@ -159,9 +172,13 @@ def build_exec_tree(result: GpScrapeResult) -> list[ExecNode]:
         by_branch.setdefault(c.branch, []).append(c)
 
     sha_to_branch = _build_sha_to_branch(by_branch)
+    sha_to_commit = {c.sha: c for c in result.commits}
+    fn_by_start = {fn.start_sha: fn for fn in result.functions}
 
     main_name = "main" if "main" in by_branch else "master"
-    return _build_exec_nodes(by_branch.get(main_name, []), by_branch, sha_to_branch)
+    return _build_exec_nodes(
+        by_branch.get(main_name, []), by_branch, sha_to_branch, sha_to_commit, fn_by_start
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +230,18 @@ def _execute(nodes: list[ExecNode], scope: dict) -> None:
                 pass
             except Exception:
                 pass
+
+        elif isinstance(node, FnCallNode):
+            for commit in node.body:
+                msg = commit.message.strip()
+                if not msg:
+                    continue
+                try:
+                    exec(msg, scope)  # noqa: S102
+                except SyntaxError:
+                    pass
+                except Exception:
+                    pass
 
 
 def run(result: GpScrapeResult, scope: Optional[dict] = None) -> dict:
