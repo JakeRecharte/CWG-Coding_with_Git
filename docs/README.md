@@ -38,11 +38,11 @@ git commit -m "x = x + 1"
 
 ### If / Else
 
-Branches named `if/<name>` and `else/<name>` define conditional blocks. The condition sits in the first commit of the branch.
+Branches named `if/<name>` and `else/<name>` define conditional blocks. The condition is the first commit of the `if/` branch.
 
 ```bash
-git commit -m "if x > 10:"
 git branch if/large
+  git commit -m "if x > 10:"
   git commit -m "    print('x is large')"
 git checkout main
 git branch else/small
@@ -72,13 +72,13 @@ git commit -m "print('blastoff')"
 Functions are defined as tagged commit ranges and called via `cherry-pick`.
 
 ```bash
-git tag -a "greet" -m "function greet(name):"
+git tag -a "fn/greet"
 git commit -m "    print('hello ' + name)"
 git commit -m "    return"
-git tag -a "end-greet"
+git tag -a "end-fn/greet"
 
 # call the function
-git cherry-pick greet
+git cherry-pick fn/greet
 ```
 
 ---
