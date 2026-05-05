@@ -136,6 +136,47 @@ If no return is specified, the branch is treated as side-effects only — prints
 
 ---
 
+## Revert and Exception Handling
+
+`git revert` serves two purposes in CWG: undoing a coding mistake, and handling exceptions.
+
+### Pure undo
+
+A revert with no added message restores the scope to what it was just before the target commit ran. This is how you "edit" a mistake without rewriting history.
+
+```bash
+git commit -m "x = 1"
+git commit -m "x = 99"   # oops
+git revert HEAD          # x is now back to 1
+```
+
+The target can be any commit by SHA, not just the previous one:
+
+```bash
+git revert abc1234       # rolls back state to before abc1234 ran
+```
+
+### Exception handler
+
+If you add code to the revert commit message (via `git revert <sha> --edit`), that code runs only if the target commit raised an error. If the target succeeded, the revert is a no-op.
+
+```bash
+git commit -m "result = 1 / x"   # might fail if x == 0
+git revert HEAD --edit
+# message becomes:
+#   result = -1
+#
+#   This reverts commit abc1234.
+```
+
+When `x == 0` the original commit raises `ZeroDivisionError`, the handler runs, and `result = -1`. When `x != 0` the original succeeds and the handler is skipped.
+
+### Detection
+
+CWG detects reverts by the auto-generated `This reverts commit <sha>.` line that `git revert` produces. Manually writing a commit with a message starting with "revert" does not trigger revert behaviour — you must use the `git revert` command.
+
+---
+
 ## Sample Programs
 
 ### Hello World
