@@ -134,8 +134,8 @@ class TestRun:
         c2 = _commit("c2", "if x > 5:", "if/b", ["c1"])
         c3 = _commit("c3", "y = 1", "if/b", ["c2"])
         c4 = _commit("c4", "y = 2", "else/b", ["c1"])
-        c5 = _commit("c5", "Merge if/b", "main", ["c1", "c3"], is_merge=True)
-        c6 = _commit("c6", "Merge else/b", "main", ["c5", "c4"], is_merge=True)
+        c5 = _commit("c5", "return y", "main", ["c1", "c3"], is_merge=True)
+        c6 = _commit("c6", "return y", "main", ["c5", "c4"], is_merge=True)
 
         scope = run(_result([c1, c2, c4, c3, c5, c6]))
         assert scope["y"] == 1
@@ -145,8 +145,8 @@ class TestRun:
         c2 = _commit("c2", "if x > 5:", "if/b", ["c1"])
         c3 = _commit("c3", "y = 1", "if/b", ["c2"])
         c4 = _commit("c4", "y = 2", "else/b", ["c1"])
-        c5 = _commit("c5", "Merge if/b", "main", ["c1", "c3"], is_merge=True)
-        c6 = _commit("c6", "Merge else/b", "main", ["c5", "c4"], is_merge=True)
+        c5 = _commit("c5", "return y", "main", ["c1", "c3"], is_merge=True)
+        c6 = _commit("c6", "return y", "main", ["c5", "c4"], is_merge=True)
 
         scope = run(_result([c1, c2, c4, c3, c5, c6]))
         assert scope["y"] == 2
@@ -164,7 +164,7 @@ class TestRun:
         c1 = _commit("c1", "i = 3", "main")
         c2 = _commit("c2", "while i > 0:", "loop/count", ["c1"])
         c3 = _commit("c3", "i = i - 1", "loop/count", ["c2"])
-        c4 = _commit("c4", "Merge loop/count", "main", ["c1", "c3"], is_merge=True)
+        c4 = _commit("c4", "return i", "main", ["c1", "c3"], is_merge=True)
 
         scope = run(_result([c1, c2, c3, c4]))
         assert scope["i"] == 0
@@ -175,7 +175,7 @@ class TestRun:
         c3 = _commit("c3", "while i > 0:", "loop/l", ["c2"])
         c4 = _commit("c4", "count = count + 1", "loop/l", ["c3"])
         c5 = _commit("c5", "i = i - 1", "loop/l", ["c4"])
-        c6 = _commit("c6", "Merge loop/l", "main", ["c2", "c5"], is_merge=True)
+        c6 = _commit("c6", "return i, count", "main", ["c2", "c5"], is_merge=True)
 
         scope = run(_result([c1, c2, c3, c4, c5, c6]))
         assert scope["count"] == 4
