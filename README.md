@@ -103,6 +103,32 @@ git cherry-pick greet
 - Local scope is discarded after merging unless a value is explicitly returned
 - Merging promotes returned values back into global scope
 
+## Execution Model
+
+CWG uses a **first-parent walk** to traverse the commit DAG. When `cwg run` is called, the interpreter walks `main` from the first commit to HEAD, oldest to newest, applying these rules at every level:
+
+1. **Regular commit** — execute the message as a Python statement, save a state snapshot
+2. **Merge commit** — pause, walk the branch's commits as a self-contained block (oldest to newest), execute the block, apply any returned values to parent scope, continue on `main`
+3. **Revert commit** — restore the state snapshot from before the reverted commit, continue
+
+Because branches can contain branches, rule 2 is recursive. The same three rules apply at every level of nesting.
+
+Nothing executes as commits are written. The full history is read first, then executed in one pass.
+
+---
+
+## Merging
+
+When a branch merges back into `main`, any variables modified inside the branch are discarded unless explicitly returned via the merge commit message.
+
+```bash
+git merge loop/countdown -m "return i"
+```
+
+Only the values named in the return are promoted back into global scope. Everything else in the branch's local scope is dropped. This keeps scope controlled and explicit — a branch cannot silently modify the global state.
+
+If no return is specified, the merge is treated as purely structural — it closes the block and execution continues on `main` with no state changes from the branch.
+
 ---
 
 ## Sample Programs
@@ -170,6 +196,14 @@ git merge loop/fizzbuzz
 | string | `name = 'alice'` |
 | bool | `flag = True` |
 | list | `nums = [1, 2, 3]` |
+
+---
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
 
 ---
 

@@ -4,12 +4,13 @@
 
 ### Prerequisites
 
-- 
+- Python 3.10+
+- Git
 
 ### Local Setup
 
 ```bash
-
+pip install -r requirements.txt
 ```
 
 ### Building from Source
