@@ -99,9 +99,11 @@ git cherry-pick fn/greet
 ## Scoping
 
 - `main` holds global scope
-- Each branch creates a local scope
-- Local scope is discarded after merging unless a value is explicitly returned
-- Merging promotes returned values back into global scope
+- `if/`, `else/`, and `loop/` branches each receive a copy of the parent scope at the moment they start
+- `else/` always starts from the parent scope — never from the `if/` branch's scope
+- `check/` branches run directly in the parent scope with no isolation
+- Variables modified inside a branch are discarded on merge unless explicitly returned
+- Returned values are promoted back into the parent scope
 
 ## Execution Model
 
@@ -121,13 +123,16 @@ Nothing executes as commits are written. The full history is read first, then ex
 
 When a branch merges back into `main`, any variables modified inside the branch are discarded unless explicitly returned via the merge commit message.
 
+Multiple variables can be returned comma-separated:
+
 ```bash
 git merge loop/countdown -m "return i"
+git merge loop/multi -m "return i, j, k"
 ```
 
-Only the values named in the return are promoted back into global scope. Everything else in the branch's local scope is dropped. This keeps scope controlled and explicit — a branch cannot silently modify the global state.
+Only the variables named in the return are promoted back into the parent scope. Everything else is dropped.
 
-If no return is specified, the merge is treated as purely structural — it closes the block and execution continues on `main` with no state changes from the branch.
+If no return is specified, the branch is treated as side-effects only — prints and other output still happen, but no state is promoted back. This is valid and intentional, not an error.
 
 ---
 
