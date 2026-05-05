@@ -29,7 +29,7 @@ except ImportError:
     sys.exit(1)
 
 
-CWG_CONFIG = ".gitlang"
+CWG_CONFIG = ".cwg"
 BRANCH_PREFIXES = ("if/", "else/", "loop/", "fn/", "check/")
 
 _URL_RE = re.compile(r"^(https?://|git@|ssh://)", re.I)
@@ -227,7 +227,7 @@ def scrape(repo_path: str, require_cwg: bool = False) -> GpScrapeResult:
     Args:
         repo_path:   Local path OR a remote URL (https://, git@, ssh://).
                      Remote repos are cloned to a temp directory and cleaned up after.
-        require_cwg: Raise ValueError if the repo has no .gitlang file.
+        require_cwg: Raise ValueError if the repo has no .cwg file.
     """
     tmp_dir: Optional[str] = None
     if _URL_RE.match(repo_path):
@@ -301,7 +301,7 @@ def scrape(repo_path: str, require_cwg: bool = False) -> GpScrapeResult:
 # ---------------------------------------------------------------------------
 
 def _print_result(result: GpScrapeResult, verbose: bool = False) -> None:
-    cwg_label = "yes" if result.is_cwg else "no (.gitlang not found)"
+    cwg_label = "yes" if result.is_cwg else "no (.cwg not found)"
     print(f"repo:      {result.repo_path}")
     print(f"cwg:       {cwg_label}")
     print(f"branches:  {', '.join(result.branches)}")
@@ -359,7 +359,7 @@ def main() -> None:
         "--strict",
         action="store_true",
         default=False,
-        help="require a .gitlang config file",
+        help="require a .cwg config file",
     )
     parser.add_argument(
         "-v", "--verbose",
