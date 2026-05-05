@@ -14,6 +14,7 @@ from .gpScraper import GpScrapeResult, CommitNode, FunctionDef
 _CONDITION_RE = re.compile(r'^(?:if|elif|while)\s+(.+?):\s*$', re.DOTALL)
 _CHECK_KW_RE = re.compile(r'^\s*(if|elif|else)\b')
 _RETURN_RE = re.compile(r'^return\s+(.+)$')
+_REVERT_SUBJECT_RE = re.compile(r'^Revert ".*"$')
 _MAX_LOOP_ITERATIONS = 10_000
 
 
@@ -53,7 +54,14 @@ class FnCallNode:
     body: list[CommitNode]
 
 
-ExecNode = Union[StatementNode, IfNode, LoopNode, CheckChainNode, FnCallNode]
+@dataclass
+class RevertNode:
+    commit: CommitNode
+    target_sha: str
+    handler: str  # empty = pure undo; non-empty = exception handler code
+
+
+ExecNode = Union[StatementNode, IfNode, LoopNode, CheckChainNode, FnCallNode, RevertNode]
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +110,8 @@ def _build_exec_nodes(
                 fn_def = fn_by_start[commit.cherry_pick_src]
                 body = [sha_to_commit[s] for s in fn_def.body_shas if s in sha_to_commit]
                 nodes.append(FnCallNode(fn_def.name, body))
+            elif commit.is_revert and commit.revert_src:
+                nodes.append(RevertNode(commit, commit.revert_src, _extract_handler(commit.message)))
             else:
                 nodes.append(StatementNode(commit))
             i += 1
@@ -197,6 +207,23 @@ def _extract_condition(message: str) -> str:
     return m.group(1).strip() if m else message.strip().rstrip(":")
 
 
+def _extract_handler(message: str) -> str:
+    """Extract handler code from a revert commit message.
+
+    Lines before 'This reverts commit' are handler code, minus the
+    auto-generated 'Revert "..."' subject line git adds.
+    """
+    lines = []
+    for line in message.splitlines():
+        if line.strip().lower().startswith("this reverts commit"):
+            break
+        if _REVERT_SUBJECT_RE.match(line.strip()):
+            continue
+        if line.strip():
+            lines.append(line.strip())
+    return "\n".join(lines)
+
+
 def _parse_return(message: str) -> list[str]:
     """Extract variable names from a 'return x, y, z' merge message."""
     m = _RETURN_RE.match(message.strip())
@@ -212,18 +239,19 @@ def _promote(branch_scope: dict, parent_scope: dict, return_vars: list[str]) -> 
             parent_scope[var] = branch_scope[var]
 
 
-def _execute(nodes: list[ExecNode], scope: dict) -> None:
+def _execute(nodes: list[ExecNode], scope: dict, snapshots: dict, errors: dict) -> None:
     for node in nodes:
         if isinstance(node, StatementNode):
             msg = node.commit.message.strip()
             if not msg:
                 continue
+            snapshots[node.commit.sha] = scope.copy()
             try:
                 exec(msg, scope)  # noqa: S102
             except SyntaxError:
                 pass  # non-executable commit messages (merge labels, etc.)
-            except Exception:
-                pass
+            except Exception as e:
+                errors[node.commit.sha] = e
 
         elif isinstance(node, IfNode):
             condition_expr = _extract_condition(node.condition.message)
@@ -233,10 +261,10 @@ def _execute(nodes: list[ExecNode], scope: dict) -> None:
                 branch_taken = False
             branch_scope = scope.copy()
             if branch_taken:
-                _execute(node.true_branch, branch_scope)
+                _execute(node.true_branch, branch_scope, snapshots, errors)
                 merge_msg = node.if_merge.message if node.if_merge else ""
             else:
-                _execute(node.false_branch, branch_scope)
+                _execute(node.false_branch, branch_scope, snapshots, errors)
                 merge_msg = node.else_merge.message if node.else_merge else ""
             _promote(branch_scope, scope, _parse_return(merge_msg))
 
@@ -250,7 +278,7 @@ def _execute(nodes: list[ExecNode], scope: dict) -> None:
                         break
                 except Exception:
                     break
-                _execute(node.body, loop_scope)
+                _execute(node.body, loop_scope, snapshots, errors)
             _promote(loop_scope, scope, return_vars)
 
         elif isinstance(node, CheckChainNode):
@@ -274,10 +302,22 @@ def _execute(nodes: list[ExecNode], scope: dict) -> None:
                 except Exception:
                     pass
 
+        elif isinstance(node, RevertNode):
+            if node.handler:
+                if node.target_sha in errors:
+                    try:
+                        exec(node.handler, scope)  # noqa: S102
+                    except Exception:
+                        pass
+            else:
+                if node.target_sha in snapshots:
+                    scope.clear()
+                    scope.update(snapshots[node.target_sha])
+
 
 def run(result: GpScrapeResult, scope: Optional[dict] = None) -> dict:
     """Execute a CWG program and return the final variable scope."""
     if scope is None:
         scope = {}
-    _execute(build_exec_tree(result), scope)
+    _execute(build_exec_tree(result), scope, snapshots={}, errors={})
     return {k: v for k, v in scope.items() if not k.startswith("__")}

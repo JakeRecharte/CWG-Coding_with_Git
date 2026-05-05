@@ -17,6 +17,7 @@ from core.interpreter import (
     LoopNode,
     CheckChainNode,
     FnCallNode,
+    RevertNode,
 )
 
 
@@ -25,7 +26,8 @@ from core.interpreter import (
 # ---------------------------------------------------------------------------
 
 def _commit(sha, message, branch, parents=None, is_merge=False,
-            is_cherry_pick=False, cherry_pick_src=None):
+            is_cherry_pick=False, cherry_pick_src=None,
+            is_revert=False, revert_src=None):
     return CommitNode(
         sha=sha,
         message=message,
@@ -34,9 +36,10 @@ def _commit(sha, message, branch, parents=None, is_merge=False,
         author="test",
         timestamp=datetime.now(tz=timezone.utc),
         is_merge=is_merge,
-        is_revert=False,
+        is_revert=is_revert,
         is_cherry_pick=is_cherry_pick,
         cherry_pick_src=cherry_pick_src,
+        revert_src=revert_src,
         tags=[],
     )
 
@@ -579,3 +582,81 @@ class TestEdgeCases:
         m1 = _commit("m1", "Merge check/a", "main", ["c1", "c2"], is_merge=True)
         scope = run(_result([c1, c2, m1]))
         assert scope["y"] == 100
+
+
+# ---------------------------------------------------------------------------
+# Revert tests
+# ---------------------------------------------------------------------------
+
+def _revert_commit(sha, target_sha, branch, parents=None, handler=""):
+    """Build a revert CommitNode with the standard git revert message format."""
+    if handler:
+        message = f"{handler}\n\nThis reverts commit {target_sha}."
+    else:
+        message = f'Revert "original"\n\nThis reverts commit {target_sha}.'
+    return _commit(sha, message, branch, parents=parents,
+                   is_revert=True, revert_src=target_sha)
+
+
+class TestRevert:
+    def test_revert_produces_revert_node(self):
+        c1 = _commit("c1", "x = 1", "main")
+        c2 = _commit("c2", "x = 99", "main", ["c1"])
+        r1 = _revert_commit("r1", "c2", "main", ["c2"])
+        tree = build_exec_tree(_result([c1, c2, r1]))
+        assert isinstance(tree[2], RevertNode)
+        assert tree[2].target_sha == "c2"
+        assert tree[2].handler == ""
+
+    def test_pure_undo_restores_scope(self):
+        c1 = _commit("c1", "x = 1", "main")
+        c2 = _commit("c2", "x = 99", "main", ["c1"])
+        r1 = _revert_commit("r1", "c2", "main", ["c2"])
+        scope = run(_result([c1, c2, r1]))
+        assert scope["x"] == 1
+
+    def test_undo_nonexistent_target_is_noop(self):
+        c1 = _commit("c1", "x = 1", "main")
+        r1 = _revert_commit("r1", "deadbeef", "main", ["c1"])
+        scope = run(_result([c1, r1]))
+        assert scope["x"] == 1
+
+    def test_handler_runs_when_target_raised_error(self):
+        c1 = _commit("c1", "x = 0", "main")
+        c2 = _commit("c2", "result = 1 / x", "main", ["c1"])
+        r1 = _revert_commit("r1", "c2", "main", ["c2"], handler="result = -1")
+        scope = run(_result([c1, c2, r1]))
+        assert scope["result"] == -1
+
+    def test_handler_is_noop_when_target_succeeded(self):
+        c1 = _commit("c1", "x = 2", "main")
+        c2 = _commit("c2", "result = 1 / x", "main", ["c1"])
+        r1 = _revert_commit("r1", "c2", "main", ["c2"], handler="result = -1")
+        scope = run(_result([c1, c2, r1]))
+        assert scope["result"] == 0.5
+        assert scope["result"] != -1
+
+    def test_handler_produces_revert_node_with_code(self):
+        c1 = _commit("c1", "x = 0", "main")
+        c2 = _commit("c2", "result = 1 / x", "main", ["c1"])
+        r1 = _revert_commit("r1", "c2", "main", ["c2"], handler="result = -1")
+        tree = build_exec_tree(_result([c1, c2, r1]))
+        assert isinstance(tree[2], RevertNode)
+        assert tree[2].handler == "result = -1"
+
+    def test_undo_multiple_commits_back(self):
+        c1 = _commit("c1", "x = 1", "main")
+        c2 = _commit("c2", "x = 2", "main", ["c1"])
+        c3 = _commit("c3", "x = 3", "main", ["c2"])
+        r1 = _revert_commit("r1", "c2", "main", ["c3"])
+        scope = run(_result([c1, c2, c3, r1]))
+        assert scope["x"] == 1
+
+    def test_statements_after_revert_execute_on_restored_scope(self):
+        c1 = _commit("c1", "x = 1", "main")
+        c2 = _commit("c2", "x = 99", "main", ["c1"])
+        r1 = _revert_commit("r1", "c2", "main", ["c2"])
+        c3 = _commit("c3", "y = x + 10", "main", ["r1"])
+        scope = run(_result([c1, c2, r1, c3]))
+        assert scope["x"] == 1
+        assert scope["y"] == 11
