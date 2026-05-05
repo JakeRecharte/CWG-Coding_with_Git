@@ -29,12 +29,13 @@ except ImportError:
     sys.exit(1)
 
 
-CWG_CONFIG = ".gitlang"
+CWG_CONFIG = ".cwg"
 BRANCH_PREFIXES = ("if/", "else/", "loop/", "fn/", "check/")
 
 _URL_RE = re.compile(r"^(https?://|git@|ssh://)", re.I)
 
 _CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{7,40})\)", re.I)
+_REVERT_SHA_RE = re.compile(r"This reverts commit ([0-9a-f]{7,40})\.", re.I)
 _FN_START_RE = re.compile(r"^fn/(.+)$")
 _FN_END_RE = re.compile(r"^end-fn/(.+)$|^end-(.+)$")
 _STASH_RE = re.compile(r"stash@\{(\d+)\}: (.+)")
@@ -56,6 +57,7 @@ class CommitNode:
     is_revert: bool = False
     is_cherry_pick: bool = False
     cherry_pick_src: Optional[str] = None  # original sha when cherry-picked
+    revert_src: Optional[str] = None       # original sha when reverted
     tags: list[str] = field(default_factory=list)
 
     def branch_type(self) -> str:
@@ -135,6 +137,11 @@ def _build_branch_map(repo: Repo) -> dict[str, str]:
 
 def _detect_cherry_pick(message: str) -> Optional[str]:
     m = _CHERRY_PICK_RE.search(message)
+    return m.group(1) if m else None
+
+
+def _detect_revert(message: str) -> Optional[str]:
+    m = _REVERT_SHA_RE.search(message)
     return m.group(1) if m else None
 
 
@@ -227,7 +234,7 @@ def scrape(repo_path: str, require_cwg: bool = False) -> GpScrapeResult:
     Args:
         repo_path:   Local path OR a remote URL (https://, git@, ssh://).
                      Remote repos are cloned to a temp directory and cleaned up after.
-        require_cwg: Raise ValueError if the repo has no .gitlang file.
+        require_cwg: Raise ValueError if the repo has no .cwg file.
     """
     tmp_dir: Optional[str] = None
     if _URL_RE.match(repo_path):
@@ -264,6 +271,7 @@ def scrape(repo_path: str, require_cwg: bool = False) -> GpScrapeResult:
                 continue
             msg = commit.message.strip()
             cherry_src = _detect_cherry_pick(msg)
+            revert_src = _detect_revert(msg)
             ts = datetime.fromtimestamp(commit.committed_date, tz=timezone.utc)
             node = CommitNode(
                 sha=commit.hexsha,
@@ -273,9 +281,10 @@ def scrape(repo_path: str, require_cwg: bool = False) -> GpScrapeResult:
                 author=str(commit.author),
                 timestamp=ts,
                 is_merge=len(commit.parents) > 1,
-                is_revert=msg.lower().startswith("revert"),
+                is_revert=revert_src is not None,
                 is_cherry_pick=cherry_src is not None,
                 cherry_pick_src=cherry_src,
+                revert_src=revert_src,
                 tags=sha_tags.get(commit.hexsha, []),
             )
             commits[commit.hexsha] = node
@@ -301,7 +310,7 @@ def scrape(repo_path: str, require_cwg: bool = False) -> GpScrapeResult:
 # ---------------------------------------------------------------------------
 
 def _print_result(result: GpScrapeResult, verbose: bool = False) -> None:
-    cwg_label = "yes" if result.is_cwg else "no (.gitlang not found)"
+    cwg_label = "yes" if result.is_cwg else "no (.cwg not found)"
     print(f"repo:      {result.repo_path}")
     print(f"cwg:       {cwg_label}")
     print(f"branches:  {', '.join(result.branches)}")
@@ -359,7 +368,7 @@ def main() -> None:
         "--strict",
         action="store_true",
         default=False,
-        help="require a .gitlang config file",
+        help="require a .cwg config file",
     )
     parser.add_argument(
         "-v", "--verbose",

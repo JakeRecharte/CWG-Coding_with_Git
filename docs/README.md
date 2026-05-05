@@ -38,11 +38,11 @@ git commit -m "x = x + 1"
 
 ### If / Else
 
-Branches named `if/<name>` and `else/<name>` define conditional blocks. The condition sits in the first commit of the branch.
+Branches named `if/<name>` and `else/<name>` define conditional blocks. The condition is the first commit of the `if/` branch.
 
 ```bash
-git commit -m "if x > 10:"
 git branch if/large
+  git commit -m "if x > 10:"
   git commit -m "    print('x is large')"
 git checkout main
 git branch else/small
@@ -72,13 +72,13 @@ git commit -m "print('blastoff')"
 Functions are defined as tagged commit ranges and called via `cherry-pick`.
 
 ```bash
-git tag -a "greet" -m "function greet(name):"
+git tag -a "fn/greet"
 git commit -m "    print('hello ' + name)"
 git commit -m "    return"
-git tag -a "end-greet"
+git tag -a "end-fn/greet"
 
 # call the function
-git cherry-pick greet
+git cherry-pick fn/greet
 ```
 
 ---
@@ -99,9 +99,11 @@ git cherry-pick greet
 ## Scoping
 
 - `main` holds global scope
-- Each branch creates a local scope
-- Local scope is discarded after merging unless a value is explicitly returned
-- Merging promotes returned values back into global scope
+- `if/`, `else/`, and `loop/` branches each receive a copy of the parent scope at the moment they start
+- `else/` always starts from the parent scope — never from the `if/` branch's scope
+- `check/` branches run directly in the parent scope with no isolation
+- Variables modified inside a branch are discarded on merge unless explicitly returned
+- Returned values are promoted back into the parent scope
 
 ## Execution Model
 
@@ -121,13 +123,57 @@ Nothing executes as commits are written. The full history is read first, then ex
 
 When a branch merges back into `main`, any variables modified inside the branch are discarded unless explicitly returned via the merge commit message.
 
+Multiple variables can be returned comma-separated:
+
 ```bash
 git merge loop/countdown -m "return i"
+git merge loop/multi -m "return i, j, k"
 ```
 
-Only the values named in the return are promoted back into global scope. Everything else in the branch's local scope is dropped. This keeps scope controlled and explicit — a branch cannot silently modify the global state.
+Only the variables named in the return are promoted back into the parent scope. Everything else is dropped.
 
-If no return is specified, the merge is treated as purely structural — it closes the block and execution continues on `main` with no state changes from the branch.
+If no return is specified, the branch is treated as side-effects only — prints and other output still happen, but no state is promoted back. This is valid and intentional, not an error.
+
+---
+
+## Revert and Exception Handling
+
+`git revert` serves two purposes in CWG: undoing a coding mistake, and handling exceptions.
+
+### Pure undo
+
+A revert with no added message restores the scope to what it was just before the target commit ran. This is how you "edit" a mistake without rewriting history.
+
+```bash
+git commit -m "x = 1"
+git commit -m "x = 99"   # oops
+git revert HEAD          # x is now back to 1
+```
+
+The target can be any commit by SHA, not just the previous one:
+
+```bash
+git revert abc1234       # rolls back state to before abc1234 ran
+```
+
+### Exception handler
+
+If you add code to the revert commit message (via `git revert <sha> --edit`), that code runs only if the target commit raised an error. If the target succeeded, the revert is a no-op.
+
+```bash
+git commit -m "result = 1 / x"   # might fail if x == 0
+git revert HEAD --edit
+# message becomes:
+#   result = -1
+#
+#   This reverts commit abc1234.
+```
+
+When `x == 0` the original commit raises `ZeroDivisionError`, the handler runs, and `result = -1`. When `x != 0` the original succeeds and the handler is skipped.
+
+### Detection
+
+CWG detects reverts by the auto-generated `This reverts commit <sha>.` line that `git revert` produces. Manually writing a commit with a message starting with "revert" does not trigger revert behaviour — you must use the `git revert` command.
 
 ---
 
