@@ -15,6 +15,8 @@ from scraper.interpreter import (
     StatementNode,
     IfNode,
     LoopNode,
+    CheckChainNode,
+    FnCallNode,
 )
 
 
@@ -22,7 +24,8 @@ from scraper.interpreter import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _commit(sha, message, branch, parents=None, is_merge=False):
+def _commit(sha, message, branch, parents=None, is_merge=False,
+            is_cherry_pick=False, cherry_pick_src=None):
     return CommitNode(
         sha=sha,
         message=message,
@@ -32,8 +35,8 @@ def _commit(sha, message, branch, parents=None, is_merge=False):
         timestamp=datetime.now(tz=timezone.utc),
         is_merge=is_merge,
         is_revert=False,
-        is_cherry_pick=False,
-        cherry_pick_src=None,
+        is_cherry_pick=is_cherry_pick,
+        cherry_pick_src=cherry_pick_src,
         tags=[],
     )
 
@@ -223,3 +226,128 @@ class TestRun:
         ]
         run(_result(commits))
         assert capsys.readouterr().out.strip() == "hello world"
+
+
+class TestCheckChain:
+    # Builds an if/elif/.../else chain using consecutive check/ merges.
+    # Each check/ branch holds a single one-liner commit.
+    # main: c1 → merge(check/a) → merge(check/b) → merge(check/c) → merge(check/d)
+
+    def _fizz_commits(self, i_val):
+        c1 = _commit("c1", f"i = {i_val}", "main")
+        c2 = _commit("c2", "if i % 15 == 0: result = 'FizzBuzz'", "check/a", ["c1"])
+        c3 = _commit("c3", "elif i % 3 == 0: result = 'Fizz'", "check/b", ["c1"])
+        c4 = _commit("c4", "elif i % 5 == 0: result = 'Buzz'", "check/c", ["c1"])
+        c5 = _commit("c5", "else: result = str(i)", "check/d", ["c1"])
+        m1 = _commit("m1", "Merge check/a", "main", ["c1", "c2"], is_merge=True)
+        m2 = _commit("m2", "Merge check/b", "main", ["m1", "c3"], is_merge=True)
+        m3 = _commit("m3", "Merge check/c", "main", ["m2", "c4"], is_merge=True)
+        m4 = _commit("m4", "Merge check/d", "main", ["m3", "c5"], is_merge=True)
+        return [c1, c2, c3, c4, c5, m1, m2, m3, m4]
+
+    def test_tree_produces_check_chain_node(self):
+        tree = build_exec_tree(_result(self._fizz_commits(15)))
+        assert len(tree) == 2
+        assert isinstance(tree[0], StatementNode)
+        assert isinstance(tree[1], CheckChainNode)
+        assert len(tree[1].lines) == 4
+
+    def test_if_branch_taken(self):
+        scope = run(_result(self._fizz_commits(15)))
+        assert scope["result"] == "FizzBuzz"
+
+    def test_first_elif_branch_taken(self):
+        scope = run(_result(self._fizz_commits(3)))
+        assert scope["result"] == "Fizz"
+
+    def test_second_elif_branch_taken(self):
+        scope = run(_result(self._fizz_commits(5)))
+        assert scope["result"] == "Buzz"
+
+    def test_else_branch_taken(self):
+        scope = run(_result(self._fizz_commits(7)))
+        assert scope["result"] == "7"
+
+    def test_if_elif_without_else(self):
+        # Chain with no else — no match leaves variable unset
+        c1 = _commit("c1", "i = 7", "main")
+        c2 = _commit("c2", "if i % 3 == 0: result = 'Fizz'", "check/a", ["c1"])
+        c3 = _commit("c3", "elif i % 5 == 0: result = 'Buzz'", "check/b", ["c1"])
+        m1 = _commit("m1", "Merge check/a", "main", ["c1", "c2"], is_merge=True)
+        m2 = _commit("m2", "Merge check/b", "main", ["m1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, m1, m2]))
+        assert "result" not in scope
+
+
+class TestFnCall:
+    # Function body lives on a fn/ branch (not executed directly).
+    # A cherry-pick commit on main whose cherry_pick_src matches the
+    # function's start_sha triggers a FnCallNode.
+
+    def _fn_result(self, body_commits, fn_def, main_commits):
+        all_commits = body_commits + main_commits
+        branches = list(dict.fromkeys(c.branch for c in all_commits))
+        return GpScrapeResult(
+            repo_path="test",
+            is_cwg=True,
+            commits=all_commits,
+            branches=branches,
+            tags={},
+            functions=[fn_def],
+            stash=[],
+        )
+
+    def test_tree_produces_fn_call_node(self):
+        b1 = _commit("b1", "x = 99", "fn/set")
+        fn_def = FunctionDef(name="set", start_sha="f0", end_sha="b1", body_shas=["b1"])
+        c1 = _commit("c1", "x = 0", "main")
+        call = _commit("cp1", "(cherry picked from commit f0)", "main", ["c1"],
+                       is_cherry_pick=True, cherry_pick_src="f0")
+        tree = build_exec_tree(self._fn_result([b1], fn_def, [c1, call]))
+        assert len(tree) == 2
+        assert isinstance(tree[1], FnCallNode)
+        assert tree[1].name == "set"
+
+    def test_fn_body_executes_in_scope(self):
+        b1 = _commit("b1", "x = 99", "fn/set")
+        fn_def = FunctionDef(name="set", start_sha="f0", end_sha="b1", body_shas=["b1"])
+        c1 = _commit("c1", "x = 0", "main")
+        call = _commit("cp1", "(cherry picked from commit f0)", "main", ["c1"],
+                       is_cherry_pick=True, cherry_pick_src="f0")
+        scope = run(self._fn_result([b1], fn_def, [c1, call]))
+        assert scope["x"] == 99
+
+    def test_fn_called_multiple_times(self):
+        b1 = _commit("b1", "n = n + 1", "fn/inc")
+        fn_def = FunctionDef(name="inc", start_sha="f0", end_sha="b1", body_shas=["b1"])
+        c1 = _commit("c1", "n = 0", "main")
+        call1 = _commit("cp1", "(cherry picked from commit f0)", "main", ["c1"],
+                        is_cherry_pick=True, cherry_pick_src="f0")
+        call2 = _commit("cp2", "(cherry picked from commit f0)", "main", ["cp1"],
+                        is_cherry_pick=True, cherry_pick_src="f0")
+        scope = run(self._fn_result([b1], fn_def, [c1, call1, call2]))
+        assert scope["n"] == 2
+
+    def test_fn_multi_statement_body(self):
+        b1 = _commit("b1", "a = x * 2", "fn/double")
+        b2 = _commit("b2", "b = a + 1", "fn/double", ["b1"])
+        fn_def = FunctionDef(name="double", start_sha="f0", end_sha="b2", body_shas=["b1", "b2"])
+        c1 = _commit("c1", "x = 5", "main")
+        call = _commit("cp1", "(cherry picked from commit f0)", "main", ["c1"],
+                       is_cherry_pick=True, cherry_pick_src="f0")
+        scope = run(self._fn_result([b1, b2], fn_def, [c1, call]))
+        assert scope["a"] == 10
+        assert scope["b"] == 11
+
+    def test_non_matching_cherry_pick_is_statement(self):
+        # cherry_pick_src that doesn't match any function → StatementNode, message is exec'd normally
+        c1 = _commit("c1", "x = 1", "main")
+        call = _commit("cp1", "x = x + 1", "main", ["c1"],
+                       is_cherry_pick=True, cherry_pick_src="deadbeef")
+        result = GpScrapeResult(
+            repo_path="test", is_cwg=True,
+            commits=[c1, call], branches=["main"],
+            tags={}, functions=[], stash=[],
+        )
+        scope = run(result)
+        assert scope["x"] == 2
