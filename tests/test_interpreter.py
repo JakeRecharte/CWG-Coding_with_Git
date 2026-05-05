@@ -1,5 +1,5 @@
 """
-Tests for scraper/interpreter.py
+Tests for core/interpreter.py
 
 Constructs CommitNode / GpScrapeResult objects manually so no real git repo
 is needed. Commits must be supplied in topological (oldest-first) order.
@@ -8,8 +8,8 @@ is needed. Commits must be supplied in topological (oldest-first) order.
 import pytest
 from datetime import datetime, timezone
 
-from scraper.gpScraper import CommitNode, GpScrapeResult, FunctionDef, StashEntry
-from scraper.interpreter import (
+from core.gpScraper import CommitNode, GpScrapeResult, FunctionDef, StashEntry
+from core.interpreter import (
     run,
     build_exec_tree,
     StatementNode,
