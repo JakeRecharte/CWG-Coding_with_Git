@@ -351,3 +351,231 @@ class TestFnCall:
         )
         scope = run(result)
         assert scope["x"] == 2
+
+    def test_fn_reads_parent_scope_variable(self):
+        b1 = _commit("b1", "result = x * 2", "fn/double")
+        fn_def = FunctionDef(name="double", start_sha="f0", end_sha="b1", body_shas=["b1"])
+        c1 = _commit("c1", "x = 7", "main")
+        call = _commit("cp1", "(cherry picked from commit f0)", "main", ["c1"],
+                       is_cherry_pick=True, cherry_pick_src="f0")
+        scope = run(self._fn_result([b1], fn_def, [c1, call]))
+        assert scope["result"] == 14
+
+    def test_fn_called_before_variable_exists_does_not_crash(self):
+        b1 = _commit("b1", "result = undefined_var + 1", "fn/use")
+        fn_def = FunctionDef(name="use", start_sha="f0", end_sha="b1", body_shas=["b1"])
+        c1 = _commit("c1", "x = 0", "main")
+        call = _commit("cp1", "(cherry picked from commit f0)", "main", ["c1"],
+                       is_cherry_pick=True, cherry_pick_src="f0")
+        scope = run(self._fn_result([b1], fn_def, [c1, call]))
+        assert "result" not in scope
+
+
+# ---------------------------------------------------------------------------
+# Scoping tests
+# ---------------------------------------------------------------------------
+
+class TestScoping:
+    def test_if_branch_does_not_leak_unreturned_variables(self):
+        c1 = _commit("c1", "x = 10", "main")
+        c2 = _commit("c2", "if x > 5:", "if/b", ["c1"])
+        c3 = _commit("c3", "y = 99", "if/b", ["c2"])
+        c4 = _commit("c4", "Merge if/b", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert "y" not in scope
+
+    def test_loop_does_not_leak_unreturned_variables(self):
+        c1 = _commit("c1", "i = 3", "main")
+        c2 = _commit("c2", "while i > 0:", "loop/l", ["c1"])
+        c3 = _commit("c3", "temp = i * 2", "loop/l", ["c2"])
+        c4 = _commit("c4", "i = i - 1", "loop/l", ["c3"])
+        c5 = _commit("c5", "return i", "main", ["c1", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5]))
+        assert scope["i"] == 0
+        assert "temp" not in scope
+
+    def test_if_partial_return_only_promotes_named_vars(self):
+        c1 = _commit("c1", "x = 0", "main")
+        c2 = _commit("c2", "if x == 0:", "if/b", ["c1"])
+        c3 = _commit("c3", "x = 1", "if/b", ["c2"])
+        c4 = _commit("c4", "y = 2", "if/b", ["c3"])
+        c5 = _commit("c5", "return x", "main", ["c1", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5]))
+        assert scope["x"] == 1
+        assert "y" not in scope
+
+    def test_loop_partial_return_only_promotes_named_vars(self):
+        c1 = _commit("c1", "i = 3", "main")
+        c2 = _commit("c2", "while i > 0:", "loop/l", ["c1"])
+        c3 = _commit("c3", "temp = i * 10", "loop/l", ["c2"])
+        c4 = _commit("c4", "i = i - 1", "loop/l", ["c3"])
+        c5 = _commit("c5", "return i", "main", ["c1", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5]))
+        assert scope["i"] == 0
+        assert "temp" not in scope
+
+    def test_else_starts_from_parent_scope_not_post_if(self):
+        # condition is false so if/ never runs
+        # else/ should see the original x=5, not anything if/ would have set
+        c1 = _commit("c1", "x = 5", "main")
+        c2 = _commit("c2", "if x > 10:", "if/b", ["c1"])
+        c3 = _commit("c3", "x = 100", "if/b", ["c2"])
+        c4 = _commit("c4", "result = x", "else/b", ["c1"])
+        c5 = _commit("c5", "return x", "main", ["c1", "c3"], is_merge=True)
+        c6 = _commit("c6", "return result", "main", ["c5", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5, c6]))
+        assert scope["result"] == 5
+
+    def test_return_nonexistent_variable_does_not_crash(self):
+        c1 = _commit("c1", "x = 1", "main")
+        c2 = _commit("c2", "if x > 0:", "if/b", ["c1"])
+        c3 = _commit("c3", "y = 1", "if/b", ["c2"])
+        c4 = _commit("c4", "return z", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert "z" not in scope
+
+
+# ---------------------------------------------------------------------------
+# Nested structure tests
+# ---------------------------------------------------------------------------
+
+class TestNestedStructures:
+    def test_loop_containing_check_chain(self):
+        c1 = _commit("c1", "i = 1", "main")
+        c2 = _commit("c2", "results = []", "main", ["c1"])
+        lc1 = _commit("lc1", "while i <= 3:", "loop/l", ["c2"])
+        cc1 = _commit("cc1", "if i % 3 == 0: results.append('Fizz')", "check/a")
+        cc2 = _commit("cc2", "else: results.append(str(i))", "check/b")
+        lm1 = _commit("lm1", "Merge check/a", "loop/l", ["lc1", "cc1"], is_merge=True)
+        lm2 = _commit("lm2", "Merge check/b", "loop/l", ["lm1", "cc2"], is_merge=True)
+        lc2 = _commit("lc2", "i = i + 1", "loop/l", ["lm2"])
+        m1 = _commit("m1", "return i, results", "main", ["c2", "lc2"], is_merge=True)
+        scope = run(_result([c1, c2, lc1, cc1, cc2, lm1, lm2, lc2, m1]))
+        assert scope["results"] == ["1", "2", "Fizz"]
+
+    def test_if_inside_loop(self):
+        c1 = _commit("c1", "i = 3", "main")
+        c2 = _commit("c2", "total = 0", "main", ["c1"])
+        lc1 = _commit("lc1", "while i > 0:", "loop/l", ["c2"])
+        ic1 = _commit("ic1", "if i > 1:", "if/b", ["lc1"])
+        ic2 = _commit("ic2", "total = total + i", "if/b", ["ic1"])
+        lm1 = _commit("lm1", "return total", "loop/l", ["lc1", "ic2"], is_merge=True)
+        lc2 = _commit("lc2", "i = i - 1", "loop/l", ["lm1"])
+        m1 = _commit("m1", "return i, total", "main", ["c2", "lc2"], is_merge=True)
+        scope = run(_result([c1, c2, lc1, ic1, ic2, lm1, lc2, m1]))
+        # i=3: 3>1 → total+=3=3, i=2
+        # i=2: 2>1 → total+=2=5, i=1
+        # i=1: 1>1 false → total unchanged, i=0
+        assert scope["total"] == 5
+        assert scope["i"] == 0
+
+    def test_sequential_loops(self):
+        c1 = _commit("c1", "a = 0", "main")
+        c2 = _commit("c2", "b = 0", "main", ["c1"])
+        l1c1 = _commit("l1c1", "while a < 3:", "loop/first", ["c2"])
+        l1c2 = _commit("l1c2", "a = a + 1", "loop/first", ["l1c1"])
+        m1 = _commit("m1", "return a", "main", ["c2", "l1c2"], is_merge=True)
+        l2c1 = _commit("l2c1", "while b < a:", "loop/second", ["m1"])
+        l2c2 = _commit("l2c2", "b = b + 1", "loop/second", ["l2c1"])
+        m2 = _commit("m2", "return b", "main", ["m1", "l2c2"], is_merge=True)
+        scope = run(_result([c1, c2, l1c1, l1c2, m1, l2c1, l2c2, m2]))
+        assert scope["a"] == 3
+        assert scope["b"] == 3
+
+    def test_statement_between_two_if_blocks(self):
+        c1 = _commit("c1", "x = 0", "main")
+        c2 = _commit("c2", "if x == 0:", "if/a", ["c1"])
+        c3 = _commit("c3", "x = 1", "if/a", ["c2"])
+        m1 = _commit("m1", "return x", "main", ["c1", "c3"], is_merge=True)
+        c4 = _commit("c4", "y = x + 10", "main", ["m1"])
+        c5 = _commit("c5", "if y > 5:", "if/b", ["c4"])
+        c6 = _commit("c6", "result = True", "if/b", ["c5"])
+        m2 = _commit("m2", "return result", "main", ["c4", "c6"], is_merge=True)
+        scope = run(_result([c1, c2, c3, m1, c4, c5, c6, m2]))
+        assert scope["x"] == 1
+        assert scope["y"] == 11
+        assert scope["result"] is True
+
+
+# ---------------------------------------------------------------------------
+# Additional tree structure tests
+# ---------------------------------------------------------------------------
+
+class TestTreeStructure:
+    def test_if_node_stores_merge_commits(self):
+        c1 = _commit("c1", "x = 1", "main")
+        c2 = _commit("c2", "if x > 0:", "if/b", ["c1"])
+        c3 = _commit("c3", "y = 1", "if/b", ["c2"])
+        c4 = _commit("c4", "y = 2", "else/b", ["c1"])
+        c5 = _commit("c5", "return y", "main", ["c1", "c3"], is_merge=True)
+        c6 = _commit("c6", "return y", "main", ["c5", "c4"], is_merge=True)
+        tree = build_exec_tree(_result([c1, c2, c4, c3, c5, c6]))
+        if_node = tree[1]
+        assert isinstance(if_node, IfNode)
+        assert if_node.if_merge is not None
+        assert if_node.if_merge.sha == "c5"
+        assert if_node.else_merge is not None
+        assert if_node.else_merge.sha == "c6"
+
+    def test_loop_node_stores_merge_commit(self):
+        c1 = _commit("c1", "i = 3", "main")
+        c2 = _commit("c2", "while i > 0:", "loop/l", ["c1"])
+        c3 = _commit("c3", "i = i - 1", "loop/l", ["c2"])
+        c4 = _commit("c4", "return i", "main", ["c1", "c3"], is_merge=True)
+        tree = build_exec_tree(_result([c1, c2, c3, c4]))
+        loop_node = tree[1]
+        assert isinstance(loop_node, LoopNode)
+        assert loop_node.merge is not None
+        assert loop_node.merge.sha == "c4"
+
+    def test_master_branch_treated_as_main(self):
+        commits = [
+            _commit("c1", "x = 1", "master"),
+            _commit("c2", "x = x + 1", "master", ["c1"]),
+        ]
+        assert run(_result(commits))["x"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Additional edge case tests
+# ---------------------------------------------------------------------------
+
+class TestEdgeCases:
+    def test_loop_max_iterations_guard(self):
+        c1 = _commit("c1", "x = 0", "main")
+        c2 = _commit("c2", "while True:", "loop/inf", ["c1"])
+        c3 = _commit("c3", "x = x + 1", "loop/inf", ["c2"])
+        c4 = _commit("c4", "return x", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert scope["x"] == 10_000
+
+    def test_loop_condition_uses_parent_variable(self):
+        c1 = _commit("c1", "limit = 3", "main")
+        c2 = _commit("c2", "i = 0", "main", ["c1"])
+        c3 = _commit("c3", "while i < limit:", "loop/l", ["c2"])
+        c4 = _commit("c4", "i = i + 1", "loop/l", ["c3"])
+        c5 = _commit("c5", "return i", "main", ["c2", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5]))
+        assert scope["i"] == 3
+
+    def test_if_condition_syntax_error_does_not_crash(self):
+        c1 = _commit("c1", "x = 1", "main")
+        c2 = _commit("c2", "if x >>>:", "if/b", ["c1"])
+        c3 = _commit("c3", "y = 99", "if/b", ["c2"])
+        c4 = _commit("c4", "return y", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert "y" not in scope
+
+    def test_if_with_empty_true_body_does_not_crash(self):
+        c1 = _commit("c1", "x = 1", "main")
+        c2 = _commit("c2", "if x > 0:", "if/b", ["c1"])
+        m1 = _commit("m1", "Merge if/b", "main", ["c1", "c2"], is_merge=True)
+        scope = run(_result([c1, c2, m1]))
+        assert scope["x"] == 1
+
+    def test_check_chain_modifies_parent_scope_directly(self):
+        c1 = _commit("c1", "x = 5", "main")
+        c2 = _commit("c2", "if x > 3: y = 100", "check/a", ["c1"])
+        m1 = _commit("m1", "Merge check/a", "main", ["c1", "c2"], is_merge=True)
+        scope = run(_result([c1, c2, m1]))
+        assert scope["y"] == 100
