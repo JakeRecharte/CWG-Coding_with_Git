@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "coding-with-git"
@@ -9,5 +9,8 @@ description = "CWG — a Git-based programming language interpreter"
 requires-python = ">=3.10"
 dependencies = ["gitpython"]
 
+[tool.setuptools.packages.find]
+include = ["core*"]
+
 [project.scripts]
-cwg = "core.gpScraper:main"
+cwg = "core.cli:main"

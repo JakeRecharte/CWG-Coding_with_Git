@@ -116,22 +116,45 @@ def _sha_to_tags(repo: Repo) -> dict[str, list[str]]:
 def _checkout_all_remote_branches(repo: Repo) -> None:
     """Create local tracking branches for every remote ref after a fresh clone."""
     existing = {b.name for b in repo.branches}
-    for ref in repo.remote_refs:
-        if ref.name == "origin/HEAD":
-            continue
-        local_name = ref.name.split("/", 1)[1]  # strip "origin/"
-        if local_name not in existing:
-            repo.create_head(local_name, ref)
-            existing.add(local_name)
+    for remote in repo.remotes:
+        for ref in remote.refs:
+            if ref.name.endswith("/HEAD"):
+                continue
+            local_name = ref.name.split("/", 1)[1]  # strip "origin/"
+            if local_name not in existing:
+                repo.create_head(local_name, ref)
+                existing.add(local_name)
 
 
 def _build_branch_map(repo: Repo) -> dict[str, str]:
-    """Map each commit sha → the branch it was first reached on (best effort)."""
+    """Map each commit sha → the branch it originated on.
+
+    Processes branches in CWG priority order (main → loop/ → if/else/ → check/)
+    so that wider parent branches claim their commits before narrower child
+    branches do.  Uses git rev-list --first-parent so merge commits don't pull
+    in the entire merged branch's history.
+    """
+    def _priority(branch):
+        name = branch.name
+        if name in ("main", "master"):
+            return 0
+        if name.startswith(("loop/", "fn/")):
+            return 1
+        if name.startswith(("if/", "else/")):
+            return 2
+        if name.startswith("check/"):
+            return 3
+        return 4
+
     branch_map: dict[str, str] = {}
-    for branch in repo.branches:
-        for commit in repo.iter_commits(branch):
-            if commit.hexsha not in branch_map:
-                branch_map[commit.hexsha] = branch.name
+    for branch in sorted(repo.branches, key=_priority):
+        try:
+            shas = repo.git.rev_list("--first-parent", branch.name).split()
+        except Exception:
+            shas = []
+        for sha in shas:
+            if sha not in branch_map:
+                branch_map[sha] = branch.name
     return branch_map
 
 
