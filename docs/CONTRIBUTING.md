@@ -9,21 +9,32 @@
 
 ### Local Setup
 
+Install the runtime dependency (`gitpython`):
+
 ```bash
 pip install -r requirements.txt
 ```
 
+For development, prefer an editable install (next section) so the `cwg` console script is wired up.
+
 ### Building from Source
 
-```bash
+Install the package in editable mode so the `cwg` command-line entry point (defined in `pyproject.toml`) is registered and points at your working copy:
 
+```bash
+pip install -e .
 ```
 
 ### Verify Your Setup
 
-```bash
+Run the test suite and exercise the CLI against a sample program:
 
+```bash
+pytest tests/
+cwg run path/to/program.cwg
 ```
+
+`cwg run` accepts a `.cwg` script, a local git repo path, or a remote URL (`https://…`, `git@…`, `ssh://…`).
 
 ## Development Workflow
 
@@ -65,23 +76,28 @@ Breaking changes: use `feat!:` or `fix!:` prefix.
 
 | What changed | Run |
 |---|---|
-| CLI code | ` ` |
-| Any change | Full test suite before opening PR |
+| Interpreter / scope / control flow (`core/interpreter.py`) | `pytest tests/test_interpreter.py` |
+| `.cwg` runner or scraper (`core/runner.py`, `core/gpScraper.py`) | `pytest tests/` |
+| CLI dispatch (`core/cli.py`) | `cwg run <sample.cwg>` against a known-good program |
+| Any change | Full `pytest tests/` before opening PR |
+
+Tests construct `CommitNode` / `GpScrapeResult` objects directly — no real git repo is required to run the suite.
 
 ## CLI Standards
 
 ### Output quality
 - Clean, minimal output — no unnecessary verbosity
-- Consistent formatting across all commands
+- Consistent formatting across all commands (`cwg run`, `cwg scrape`)
+- Program output (e.g. `print(...)` from a CWG program) goes to stdout; CLI diagnostics go to stderr
 
 ### Error handling
-- No raw stack traces in normal mode
-- Use the structured error system (``)
-- `` may show detailed output
+- No raw Python stack traces in normal mode — surface a one-line message and exit non-zero (see `core/cli.py` and `core/runner.py` for the dispatch path that prints `error: …` to stderr and exits `1`)
+- Distinguish *user errors* (missing file, bad URL, malformed `.cwg`) from *interpreter errors* (a CWG program raised at runtime). User errors should fail fast at the CLI; runtime errors inside a program are caught by the interpreter and may be handled by a `git revert --edit` exception handler
+- Catch-and-swallow blocks inside `core/interpreter.py` exist for non-executable commit messages (merge labels, free-form text) and must remain silent — do not log or print from them
 
 ### Language consistency
-- Follow existing CWG command voice and terminology
-- Match output patterns of existing commands
+- Follow existing CWG command voice and terminology — match the vocabulary used in `README.md` (commit = statement, branch = block, merge = close-block, tag = function, cherry-pick = call, revert = undo / exception handler)
+- Match output patterns of existing commands; do not introduce new flag styles without updating `core/cli.py` and `core/runner.py` together
 
 ## Security Checks
 
