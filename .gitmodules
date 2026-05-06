@@ -1,0 +1,3 @@
+[submodule "CWGApp"]
+	path = CWGApp
+	url = https://github.com/dominicvicente31/CWGApp.git
