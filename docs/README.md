@@ -1,4 +1,7 @@
-# CWG — Coding With Git
+<img width="1622" height="669" alt="image" src="https://github.com/user-attachments/assets/1c015b26-30bf-4f6b-9023-d2ba5ccc7714" />
+
+
+# Coding With Git
 
 > **Work in progress.** This project is in early draft stage. Syntax and semantics are subject to change.
 
