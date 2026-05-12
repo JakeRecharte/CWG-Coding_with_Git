@@ -70,6 +70,19 @@ git merge while/countdown
 git commit -m "print('blastoff')"
 ```
 
+### For Loops
+
+Branches named `for/<name>` define for loops. The first commit in the branch is the `for` header — both `for x in iterable:` and tuple-unpacking forms like `for x, y in pairs:` are supported.
+
+```bash
+git commit -m "total = 0"
+git branch for/sum
+  git commit -m "for i in [1, 2, 3, 4, 5]:"
+  git commit -m "    total = total + i"
+git checkout main
+git merge for/sum -m "return total"
+```
+
 ### Functions
 
 Functions are defined as tagged commit ranges and called via `cherry-pick`.
@@ -94,6 +107,7 @@ git cherry-pick fn/greet
 | `if/<name>` | Conditional true block |
 | `else/<name>` | Conditional false block |
 | `while/<name>` | While loop |
+| `for/<name>` | For loop |
 | `fn/<name>` | Function definition |
 | `check/<name>` | Inline conditional (if/elif/else one-liners) |
 
@@ -102,7 +116,7 @@ git cherry-pick fn/greet
 ## Scoping
 
 - `main` holds global scope
-- `if/`, `else/`, and `while/` branches each receive a copy of the parent scope at the moment they start
+- `if/`, `else/`, `while/`, and `for/` branches each receive a copy of the parent scope at the moment they start
 - `else/` always starts from the parent scope — never from the `if/` branch's scope
 - `check/` branches run directly in the parent scope with no isolation
 - Variables modified inside a branch are discarded on merge unless explicitly returned

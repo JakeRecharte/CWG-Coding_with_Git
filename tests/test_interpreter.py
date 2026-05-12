@@ -15,6 +15,7 @@ from core.interpreter import (
     StatementNode,
     IfNode,
     WhileNode,
+    ForNode,
     CheckChainNode,
     FnCallNode,
     RevertNode,
@@ -582,6 +583,128 @@ class TestEdgeCases:
         m1 = _commit("m1", "Merge check/a", "main", ["c1", "c2"], is_merge=True)
         scope = run(_result([c1, c2, m1]))
         assert scope["y"] == 100
+
+
+# ---------------------------------------------------------------------------
+# For loop tests
+# ---------------------------------------------------------------------------
+
+class TestForLoop:
+    def test_tree_produces_for_node(self):
+        c1 = _commit("c1", "total = 0", "main")
+        c2 = _commit("c2", "for i in [1, 2, 3]:", "for/sum", ["c1"])
+        c3 = _commit("c3", "total = total + i", "for/sum", ["c2"])
+        c4 = _commit("c4", "Merge for/sum", "main", ["c1", "c3"], is_merge=True)
+        tree = build_exec_tree(_result([c1, c2, c3, c4]))
+        assert len(tree) == 2
+        assert isinstance(tree[1], ForNode)
+        assert len(tree[1].body) == 1
+
+    def test_for_iterates_over_list(self):
+        c1 = _commit("c1", "total = 0", "main")
+        c2 = _commit("c2", "for i in [1, 2, 3, 4]:", "for/sum", ["c1"])
+        c3 = _commit("c3", "total = total + i", "for/sum", ["c2"])
+        c4 = _commit("c4", "return total", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert scope["total"] == 10
+
+    def test_for_iterates_over_range(self):
+        c1 = _commit("c1", "total = 0", "main")
+        c2 = _commit("c2", "for i in range(5):", "for/sum", ["c1"])
+        c3 = _commit("c3", "total = total + i", "for/sum", ["c2"])
+        c4 = _commit("c4", "return total", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert scope["total"] == 10  # 0+1+2+3+4
+
+    def test_for_empty_iterable_does_not_execute_body(self):
+        c1 = _commit("c1", "total = 0", "main")
+        c2 = _commit("c2", "for i in []:", "for/sum", ["c1"])
+        c3 = _commit("c3", "total = total + 1", "for/sum", ["c2"])
+        c4 = _commit("c4", "return total", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert scope["total"] == 0
+
+    def test_for_iter_variable_holds_last_value_when_returned(self):
+        c1 = _commit("c1", "last = None", "main")
+        c2 = _commit("c2", "for i in [10, 20, 30]:", "for/walk", ["c1"])
+        c3 = _commit("c3", "last = i", "for/walk", ["c2"])
+        c4 = _commit("c4", "return last", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert scope["last"] == 30
+
+    def test_for_does_not_leak_unreturned_variables(self):
+        c1 = _commit("c1", "total = 0", "main")
+        c2 = _commit("c2", "for i in [1, 2, 3]:", "for/l", ["c1"])
+        c3 = _commit("c3", "temp = i * 2", "for/l", ["c2"])
+        c4 = _commit("c4", "total = total + i", "for/l", ["c3"])
+        c5 = _commit("c5", "return total", "main", ["c1", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5]))
+        assert scope["total"] == 6
+        assert "temp" not in scope
+        assert "i" not in scope
+
+    def test_for_partial_return_only_promotes_named_vars(self):
+        c1 = _commit("c1", "total = 0", "main")
+        c2 = _commit("c2", "for i in [1, 2, 3]:", "for/l", ["c1"])
+        c3 = _commit("c3", "temp = i * 10", "for/l", ["c2"])
+        c4 = _commit("c4", "total = total + i", "for/l", ["c3"])
+        c5 = _commit("c5", "return total", "main", ["c1", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5]))
+        assert scope["total"] == 6
+        assert "temp" not in scope
+
+    def test_for_tuple_unpacking(self):
+        c1 = _commit("c1", "pairs = [(1, 2), (3, 4), (5, 6)]", "main")
+        c2 = _commit("c2", "sums = []", "main", ["c1"])
+        c3 = _commit("c3", "for x, y in pairs:", "for/pairs", ["c2"])
+        c4 = _commit("c4", "sums.append(x + y)", "for/pairs", ["c3"])
+        c5 = _commit("c5", "return sums", "main", ["c2", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5]))
+        assert scope["sums"] == [3, 7, 11]
+
+    def test_for_node_stores_merge_commit(self):
+        c1 = _commit("c1", "total = 0", "main")
+        c2 = _commit("c2", "for i in [1, 2, 3]:", "for/l", ["c1"])
+        c3 = _commit("c3", "total = total + i", "for/l", ["c2"])
+        c4 = _commit("c4", "return total", "main", ["c1", "c3"], is_merge=True)
+        tree = build_exec_tree(_result([c1, c2, c3, c4]))
+        for_node = tree[1]
+        assert isinstance(for_node, ForNode)
+        assert for_node.merge is not None
+        assert for_node.merge.sha == "c4"
+
+    def test_for_bad_iterable_does_not_crash(self):
+        c1 = _commit("c1", "total = 0", "main")
+        c2 = _commit("c2", "for i in not_a_real_var:", "for/l", ["c1"])
+        c3 = _commit("c3", "total = total + 1", "for/l", ["c2"])
+        c4 = _commit("c4", "return total", "main", ["c1", "c3"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4]))
+        assert scope["total"] == 0
+
+    def test_for_max_iterations_guard(self):
+        # itertools.count() is an infinite iterator — guard must stop it
+        c1 = _commit("c1", "import itertools", "main")
+        c2 = _commit("c2", "x = 0", "main", ["c1"])
+        c3 = _commit("c3", "for i in itertools.count():", "for/inf", ["c2"])
+        c4 = _commit("c4", "x = x + 1", "for/inf", ["c3"])
+        c5 = _commit("c5", "return x", "main", ["c2", "c4"], is_merge=True)
+        scope = run(_result([c1, c2, c3, c4, c5]))
+        assert scope["x"] == 10_000
+
+    def test_for_inside_while(self):
+        c1 = _commit("c1", "outer = 0", "main")
+        c2 = _commit("c2", "total = 0", "main", ["c1"])
+        wc1 = _commit("wc1", "while outer < 2:", "while/w", ["c2"])
+        fc1 = _commit("fc1", "for i in [1, 2, 3]:", "for/f", ["wc1"])
+        fc2 = _commit("fc2", "total = total + i", "for/f", ["fc1"])
+        wm1 = _commit("wm1", "return total", "while/w", ["wc1", "fc2"], is_merge=True)
+        wc2 = _commit("wc2", "outer = outer + 1", "while/w", ["wm1"])
+        m1 = _commit("m1", "return total, outer", "main", ["c2", "wc2"], is_merge=True)
+        scope = run(_result([c1, c2, wc1, fc1, fc2, wm1, wc2, m1]))
+        # outer=0: for loop adds 1+2+3=6 → total=6, outer=1
+        # outer=1: for loop adds 1+2+3=6 → total=12, outer=2
+        assert scope["total"] == 12
+        assert scope["outer"] == 2
 
 
 # ---------------------------------------------------------------------------
