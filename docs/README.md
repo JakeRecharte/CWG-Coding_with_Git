@@ -7,7 +7,7 @@
 
 CWG is a programming language where the source code *is* the git history. Commit messages are statements, branches are control flow blocks, and merges close those blocks. The interpreter walks the commit DAG and executes it as a program.
 
-The goal is to use git as a genuine programming medium — readable syntax, real execution, built entirely on top of version control primitives.
+The goal is to use git as a genuine programming medium. Readable syntax, real execution, built entirely on top of version control primitives.
 
 ---
 
@@ -30,7 +30,7 @@ The goal is to use git as a genuine programming medium — readable syntax, real
 
 CWG executes Python syntax inside commit messages. Commit messages must be valid Python statements for the interpreter to recognize and run them.
 
-### Variables
+### Variables, int, string, bool, int operator 
 
 ```bash
 git commit -m "x = 5"
@@ -55,18 +55,18 @@ git merge if/large
 git merge else/small
 ```
 
-### Loops
+### While Loops
 
-Branches named `loop/<name>` define while loops. The first commit in the branch is the `while` condition.
+Branches named `while/<name>` define while loops. The first commit in the branch is the `while` condition.
 
 ```bash
 git commit -m "i = 10"
-git branch loop/countdown
+git branch while/countdown
   git commit -m "while i > 0:"
   git commit -m "    print(i)"
   git commit -m "    i = i - 1"
 git checkout main
-git merge loop/countdown
+git merge while/countdown
 git commit -m "print('blastoff')"
 ```
 
@@ -93,7 +93,7 @@ git cherry-pick fn/greet
 | `main` / `master` | Global scope |
 | `if/<name>` | Conditional true block |
 | `else/<name>` | Conditional false block |
-| `loop/<name>` | While loop |
+| `while/<name>` | While loop |
 | `fn/<name>` | Function definition |
 | `check/<name>` | Inline conditional (if/elif/else one-liners) |
 
@@ -102,7 +102,7 @@ git cherry-pick fn/greet
 ## Scoping
 
 - `main` holds global scope
-- `if/`, `else/`, and `loop/` branches each receive a copy of the parent scope at the moment they start
+- `if/`, `else/`, and `while/` branches each receive a copy of the parent scope at the moment they start
 - `else/` always starts from the parent scope — never from the `if/` branch's scope
 - `check/` branches run directly in the parent scope with no isolation
 - Variables modified inside a branch are discarded on merge unless explicitly returned
@@ -129,8 +129,8 @@ When a branch merges back into `main`, any variables modified inside the branch 
 Multiple variables can be returned comma-separated:
 
 ```bash
-git merge loop/countdown -m "return i"
-git merge loop/multi -m "return i, j, k"
+git merge while/countdown -m "return i"
+git merge while/multi -m "return i, j, k"
 ```
 
 Only the variables named in the return are promoted back into the parent scope. Everything else is dropped.
@@ -196,12 +196,12 @@ git commit -m "print(message)"
 ```bash
 git init countdown
 git commit -m "i = 10"
-git branch loop/countdown
+git branch while/countdown
   git commit -m "while i > 0:"
   git commit -m "    print(i)"
   git commit -m "    i = i - 1"
 git checkout main
-git merge loop/countdown
+git merge while/countdown
 git commit -m "print('blastoff')"
 # output: 10 9 8 7 6 5 4 3 2 1 blastoff
 ```
@@ -211,27 +211,27 @@ git commit -m "print('blastoff')"
 ```bash
 git init fizzbuzz
 git commit -m "i = 1"
-git branch loop/fizzbuzz
+git branch while/fizzbuzz
   git commit -m "while i <= 20:"
   git branch check/fizzbuzz
     git commit -m "    if i % 15 == 0: print('FizzBuzz')"
-  git checkout loop/fizzbuzz
+  git checkout while/fizzbuzz
   git merge check/fizzbuzz
   git branch check/fizz
     git commit -m "    elif i % 3 == 0: print('Fizz')"
-  git checkout loop/fizzbuzz
+  git checkout while/fizzbuzz
   git merge check/fizz
   git branch check/buzz
     git commit -m "    elif i % 5 == 0: print('Buzz')"
-  git checkout loop/fizzbuzz
+  git checkout while/fizzbuzz
   git merge check/buzz
   git branch check/default
     git commit -m "    else: print(i)"
-  git checkout loop/fizzbuzz
+  git checkout while/fizzbuzz
   git merge check/default
   git commit -m "    i = i + 1"
 git checkout main
-git merge loop/fizzbuzz
+git merge while/fizzbuzz
 ```
 
 ---

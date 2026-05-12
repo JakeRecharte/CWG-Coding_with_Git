@@ -4,7 +4,7 @@ program structure the CWG interpreter expects.
 
 Every git construct from the CWG spec is covered:
   commit       → statement / instruction
-  branch       → control-flow block  (if/ else/ loop/ fn/ check/)
+  branch       → control-flow block  (if/ else/ while/ for/ fn/ check/)
   merge        → block close, return to parent scope
   tag          → function definition boundary
   cherry-pick  → function call
@@ -30,7 +30,7 @@ except ImportError:
 
 
 CWG_CONFIG = ".cwg"
-BRANCH_PREFIXES = ("if/", "else/", "loop/", "fn/", "check/")
+BRANCH_PREFIXES = ("if/", "else/", "while/", "for/", "fn/", "check/")
 
 _URL_RE = re.compile(r"^(https?://|git@|ssh://)", re.I)
 
@@ -129,7 +129,7 @@ def _checkout_all_remote_branches(repo: Repo) -> None:
 def _build_branch_map(repo: Repo) -> dict[str, str]:
     """Map each commit sha → the branch it originated on.
 
-    Processes branches in CWG priority order (main → loop/ → if/else/ → check/)
+    Processes branches in CWG priority order (main → while/for/ → if/else/ → check/)
     so that wider parent branches claim their commits before narrower child
     branches do.  Uses git rev-list --first-parent so merge commits don't pull
     in the entire merged branch's history.
@@ -138,7 +138,7 @@ def _build_branch_map(repo: Repo) -> dict[str, str]:
         name = branch.name
         if name in ("main", "master"):
             return 0
-        if name.startswith(("loop/", "fn/")):
+        if name.startswith(("while/", "for/", "fn/")):
             return 1
         if name.startswith(("if/", "else/")):
             return 2

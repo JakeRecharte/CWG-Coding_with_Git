@@ -14,7 +14,7 @@ from core.interpreter import (
     build_exec_tree,
     StatementNode,
     IfNode,
-    LoopNode,
+    WhileNode,
     CheckChainNode,
     FnCallNode,
     RevertNode,
@@ -103,16 +103,16 @@ class TestBuildExecTree:
         assert len(if_node.true_branch) == 1
         assert if_node.false_branch == []
 
-    def test_loop_produces_loop_node(self):
+    def test_while_produces_while_node(self):
         c1 = _commit("c1", "i = 3", "main")
-        c2 = _commit("c2", "while i > 0:", "loop/count", ["c1"])
-        c3 = _commit("c3", "i = i - 1", "loop/count", ["c2"])
-        c4 = _commit("c4", "Merge loop/count", "main", ["c1", "c3"], is_merge=True)
+        c2 = _commit("c2", "while i > 0:", "while/count", ["c1"])
+        c3 = _commit("c3", "i = i - 1", "while/count", ["c2"])
+        c4 = _commit("c4", "Merge while/count", "main", ["c1", "c3"], is_merge=True)
 
         tree = build_exec_tree(_result([c1, c2, c3, c4]))
 
         assert len(tree) == 2
-        assert isinstance(tree[1], LoopNode)
+        assert isinstance(tree[1], WhileNode)
         assert len(tree[1].body) == 1
 
 
@@ -163,41 +163,41 @@ class TestRun:
         scope = run(_result([c1, c2, c3, c4]))
         assert scope["y"] == 0
 
-    def test_while_loop_counts_down(self):
+    def test_while_counts_down(self):
         c1 = _commit("c1", "i = 3", "main")
-        c2 = _commit("c2", "while i > 0:", "loop/count", ["c1"])
-        c3 = _commit("c3", "i = i - 1", "loop/count", ["c2"])
+        c2 = _commit("c2", "while i > 0:", "while/count", ["c1"])
+        c3 = _commit("c3", "i = i - 1", "while/count", ["c2"])
         c4 = _commit("c4", "return i", "main", ["c1", "c3"], is_merge=True)
 
         scope = run(_result([c1, c2, c3, c4]))
         assert scope["i"] == 0
 
-    def test_while_loop_body_executes_correct_number_of_times(self):
+    def test_while_body_executes_correct_number_of_times(self):
         c1 = _commit("c1", "i = 4", "main")
         c2 = _commit("c2", "count = 0", "main", ["c1"])
-        c3 = _commit("c3", "while i > 0:", "loop/l", ["c2"])
-        c4 = _commit("c4", "count = count + 1", "loop/l", ["c3"])
-        c5 = _commit("c5", "i = i - 1", "loop/l", ["c4"])
+        c3 = _commit("c3", "while i > 0:", "while/l", ["c2"])
+        c4 = _commit("c4", "count = count + 1", "while/l", ["c3"])
+        c5 = _commit("c5", "i = i - 1", "while/l", ["c4"])
         c6 = _commit("c6", "return i, count", "main", ["c2", "c5"], is_merge=True)
 
         scope = run(_result([c1, c2, c3, c4, c5, c6]))
         assert scope["count"] == 4
         assert scope["i"] == 0
 
-    def test_loop_never_entered_when_condition_false(self):
+    def test_while_never_entered_when_condition_false(self):
         c1 = _commit("c1", "i = 0", "main")
-        c2 = _commit("c2", "while i > 0:", "loop/l", ["c1"])
-        c3 = _commit("c3", "i = i - 1", "loop/l", ["c2"])
-        c4 = _commit("c4", "Merge loop/l", "main", ["c1", "c3"], is_merge=True)
+        c2 = _commit("c2", "while i > 0:", "while/l", ["c1"])
+        c3 = _commit("c3", "i = i - 1", "while/l", ["c2"])
+        c4 = _commit("c4", "Merge while/l", "main", ["c1", "c3"], is_merge=True)
 
         scope = run(_result([c1, c2, c3, c4]))
         assert scope["i"] == 0
 
-    def test_statement_after_loop_executes(self):
+    def test_statement_after_while_executes(self):
         c1 = _commit("c1", "i = 2", "main")
-        c2 = _commit("c2", "while i > 0:", "loop/l", ["c1"])
-        c3 = _commit("c3", "i = i - 1", "loop/l", ["c2"])
-        c4 = _commit("c4", "Merge loop/l", "main", ["c1", "c3"], is_merge=True)
+        c2 = _commit("c2", "while i > 0:", "while/l", ["c1"])
+        c3 = _commit("c3", "i = i - 1", "while/l", ["c2"])
+        c4 = _commit("c4", "Merge while/l", "main", ["c1", "c3"], is_merge=True)
         c5 = _commit("c5", "done = True", "main", ["c4"])
 
         scope = run(_result([c1, c2, c3, c4, c5]))
@@ -387,11 +387,11 @@ class TestScoping:
         scope = run(_result([c1, c2, c3, c4]))
         assert "y" not in scope
 
-    def test_loop_does_not_leak_unreturned_variables(self):
+    def test_while_does_not_leak_unreturned_variables(self):
         c1 = _commit("c1", "i = 3", "main")
-        c2 = _commit("c2", "while i > 0:", "loop/l", ["c1"])
-        c3 = _commit("c3", "temp = i * 2", "loop/l", ["c2"])
-        c4 = _commit("c4", "i = i - 1", "loop/l", ["c3"])
+        c2 = _commit("c2", "while i > 0:", "while/l", ["c1"])
+        c3 = _commit("c3", "temp = i * 2", "while/l", ["c2"])
+        c4 = _commit("c4", "i = i - 1", "while/l", ["c3"])
         c5 = _commit("c5", "return i", "main", ["c1", "c4"], is_merge=True)
         scope = run(_result([c1, c2, c3, c4, c5]))
         assert scope["i"] == 0
@@ -407,11 +407,11 @@ class TestScoping:
         assert scope["x"] == 1
         assert "y" not in scope
 
-    def test_loop_partial_return_only_promotes_named_vars(self):
+    def test_while_partial_return_only_promotes_named_vars(self):
         c1 = _commit("c1", "i = 3", "main")
-        c2 = _commit("c2", "while i > 0:", "loop/l", ["c1"])
-        c3 = _commit("c3", "temp = i * 10", "loop/l", ["c2"])
-        c4 = _commit("c4", "i = i - 1", "loop/l", ["c3"])
+        c2 = _commit("c2", "while i > 0:", "while/l", ["c1"])
+        c3 = _commit("c3", "temp = i * 10", "while/l", ["c2"])
+        c4 = _commit("c4", "i = i - 1", "while/l", ["c3"])
         c5 = _commit("c5", "return i", "main", ["c1", "c4"], is_merge=True)
         scope = run(_result([c1, c2, c3, c4, c5]))
         assert scope["i"] == 0
@@ -443,27 +443,27 @@ class TestScoping:
 # ---------------------------------------------------------------------------
 
 class TestNestedStructures:
-    def test_loop_containing_check_chain(self):
+    def test_while_containing_check_chain(self):
         c1 = _commit("c1", "i = 1", "main")
         c2 = _commit("c2", "results = []", "main", ["c1"])
-        lc1 = _commit("lc1", "while i <= 3:", "loop/l", ["c2"])
+        lc1 = _commit("lc1", "while i <= 3:", "while/l", ["c2"])
         cc1 = _commit("cc1", "if i % 3 == 0: results.append('Fizz')", "check/a")
         cc2 = _commit("cc2", "else: results.append(str(i))", "check/b")
-        lm1 = _commit("lm1", "Merge check/a", "loop/l", ["lc1", "cc1"], is_merge=True)
-        lm2 = _commit("lm2", "Merge check/b", "loop/l", ["lm1", "cc2"], is_merge=True)
-        lc2 = _commit("lc2", "i = i + 1", "loop/l", ["lm2"])
+        lm1 = _commit("lm1", "Merge check/a", "while/l", ["lc1", "cc1"], is_merge=True)
+        lm2 = _commit("lm2", "Merge check/b", "while/l", ["lm1", "cc2"], is_merge=True)
+        lc2 = _commit("lc2", "i = i + 1", "while/l", ["lm2"])
         m1 = _commit("m1", "return i, results", "main", ["c2", "lc2"], is_merge=True)
         scope = run(_result([c1, c2, lc1, cc1, cc2, lm1, lm2, lc2, m1]))
         assert scope["results"] == ["1", "2", "Fizz"]
 
-    def test_if_inside_loop(self):
+    def test_if_inside_while(self):
         c1 = _commit("c1", "i = 3", "main")
         c2 = _commit("c2", "total = 0", "main", ["c1"])
-        lc1 = _commit("lc1", "while i > 0:", "loop/l", ["c2"])
+        lc1 = _commit("lc1", "while i > 0:", "while/l", ["c2"])
         ic1 = _commit("ic1", "if i > 1:", "if/b", ["lc1"])
         ic2 = _commit("ic2", "total = total + i", "if/b", ["ic1"])
-        lm1 = _commit("lm1", "return total", "loop/l", ["lc1", "ic2"], is_merge=True)
-        lc2 = _commit("lc2", "i = i - 1", "loop/l", ["lm1"])
+        lm1 = _commit("lm1", "return total", "while/l", ["lc1", "ic2"], is_merge=True)
+        lc2 = _commit("lc2", "i = i - 1", "while/l", ["lm1"])
         m1 = _commit("m1", "return i, total", "main", ["c2", "lc2"], is_merge=True)
         scope = run(_result([c1, c2, lc1, ic1, ic2, lm1, lc2, m1]))
         # i=3: 3>1 → total+=3=3, i=2
@@ -472,14 +472,14 @@ class TestNestedStructures:
         assert scope["total"] == 5
         assert scope["i"] == 0
 
-    def test_sequential_loops(self):
+    def test_sequential_whiles(self):
         c1 = _commit("c1", "a = 0", "main")
         c2 = _commit("c2", "b = 0", "main", ["c1"])
-        l1c1 = _commit("l1c1", "while a < 3:", "loop/first", ["c2"])
-        l1c2 = _commit("l1c2", "a = a + 1", "loop/first", ["l1c1"])
+        l1c1 = _commit("l1c1", "while a < 3:", "while/first", ["c2"])
+        l1c2 = _commit("l1c2", "a = a + 1", "while/first", ["l1c1"])
         m1 = _commit("m1", "return a", "main", ["c2", "l1c2"], is_merge=True)
-        l2c1 = _commit("l2c1", "while b < a:", "loop/second", ["m1"])
-        l2c2 = _commit("l2c2", "b = b + 1", "loop/second", ["l2c1"])
+        l2c1 = _commit("l2c1", "while b < a:", "while/second", ["m1"])
+        l2c2 = _commit("l2c2", "b = b + 1", "while/second", ["l2c1"])
         m2 = _commit("m2", "return b", "main", ["m1", "l2c2"], is_merge=True)
         scope = run(_result([c1, c2, l1c1, l1c2, m1, l2c1, l2c2, m2]))
         assert scope["a"] == 3
@@ -520,16 +520,16 @@ class TestTreeStructure:
         assert if_node.else_merge is not None
         assert if_node.else_merge.sha == "c6"
 
-    def test_loop_node_stores_merge_commit(self):
+    def test_while_node_stores_merge_commit(self):
         c1 = _commit("c1", "i = 3", "main")
-        c2 = _commit("c2", "while i > 0:", "loop/l", ["c1"])
-        c3 = _commit("c3", "i = i - 1", "loop/l", ["c2"])
+        c2 = _commit("c2", "while i > 0:", "while/l", ["c1"])
+        c3 = _commit("c3", "i = i - 1", "while/l", ["c2"])
         c4 = _commit("c4", "return i", "main", ["c1", "c3"], is_merge=True)
         tree = build_exec_tree(_result([c1, c2, c3, c4]))
-        loop_node = tree[1]
-        assert isinstance(loop_node, LoopNode)
-        assert loop_node.merge is not None
-        assert loop_node.merge.sha == "c4"
+        while_node = tree[1]
+        assert isinstance(while_node, WhileNode)
+        assert while_node.merge is not None
+        assert while_node.merge.sha == "c4"
 
     def test_master_branch_treated_as_main(self):
         commits = [
@@ -544,19 +544,19 @@ class TestTreeStructure:
 # ---------------------------------------------------------------------------
 
 class TestEdgeCases:
-    def test_loop_max_iterations_guard(self):
+    def test_while_max_iterations_guard(self):
         c1 = _commit("c1", "x = 0", "main")
-        c2 = _commit("c2", "while True:", "loop/inf", ["c1"])
-        c3 = _commit("c3", "x = x + 1", "loop/inf", ["c2"])
+        c2 = _commit("c2", "while True:", "while/inf", ["c1"])
+        c3 = _commit("c3", "x = x + 1", "while/inf", ["c2"])
         c4 = _commit("c4", "return x", "main", ["c1", "c3"], is_merge=True)
         scope = run(_result([c1, c2, c3, c4]))
         assert scope["x"] == 10_000
 
-    def test_loop_condition_uses_parent_variable(self):
+    def test_while_condition_uses_parent_variable(self):
         c1 = _commit("c1", "limit = 3", "main")
         c2 = _commit("c2", "i = 0", "main", ["c1"])
-        c3 = _commit("c3", "while i < limit:", "loop/l", ["c2"])
-        c4 = _commit("c4", "i = i + 1", "loop/l", ["c3"])
+        c3 = _commit("c3", "while i < limit:", "while/l", ["c2"])
+        c4 = _commit("c4", "i = i + 1", "while/l", ["c3"])
         c5 = _commit("c5", "return i", "main", ["c2", "c4"], is_merge=True)
         scope = run(_result([c1, c2, c3, c4, c5]))
         assert scope["i"] == 3
