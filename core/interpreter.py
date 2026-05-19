@@ -2,7 +2,7 @@
 CWG interpreter — branch control-flow engine.
 
 Consumes a GpScrapeResult and executes the CWG program encoded in git history.
-Supported constructs: statements, if/else blocks, while loops, check/ inlines, fn/ calls.
+Supported constructs: statements, if/else blocks, while loops, for loops, check/ inlines, fn/ calls.
 """
 
 import re
@@ -12,10 +12,12 @@ from typing import Optional, Union
 from .gpScraper import GpScrapeResult, CommitNode, FunctionDef
 
 _CONDITION_RE = re.compile(r'^(?:if|elif|while)\s+(.+?):\s*$', re.DOTALL)
+_FOR_HEADER_RE = re.compile(r'^for\s+(.+?)\s+in\s+(.+?):\s*$', re.DOTALL)
 _CHECK_KW_RE = re.compile(r'^\s*(if|elif|else)\b')
 _RETURN_RE = re.compile(r'^return\s+(.+)$')
 _REVERT_SUBJECT_RE = re.compile(r'^Revert ".*"$')
-_MAX_LOOP_ITERATIONS = 10_000
+_MAX_WHILE_ITERATIONS = 10_000
+_MAX_FOR_ITERATIONS = 10_000
 
 
 # ---------------------------------------------------------------------------
@@ -37,8 +39,15 @@ class IfNode:
 
 
 @dataclass
-class LoopNode:
+class WhileNode:
     condition: CommitNode
+    body: list["ExecNode"] = field(default_factory=list)
+    merge: Optional[CommitNode] = None
+
+
+@dataclass
+class ForNode:
+    header: CommitNode
     body: list["ExecNode"] = field(default_factory=list)
     merge: Optional[CommitNode] = None
 
@@ -61,7 +70,7 @@ class RevertNode:
     handler: str  # empty = pure undo; non-empty = exception handler code
 
 
-ExecNode = Union[StatementNode, IfNode, LoopNode, CheckChainNode, FnCallNode, RevertNode]
+ExecNode = Union[StatementNode, IfNode, WhileNode, ForNode, CheckChainNode, FnCallNode, RevertNode]
 
 
 # ---------------------------------------------------------------------------
@@ -144,12 +153,19 @@ def _build_exec_nodes(
             if condition:
                 nodes.append(IfNode(condition, true_body, false_body, commit, else_merge))
 
-        elif prefix == "loop":
-            loop_commits = by_branch.get(merged, [])
-            condition = loop_commits[0] if loop_commits else None
-            body = _build_exec_nodes(loop_commits[1:], by_branch, sha_to_branch, sha_to_commit, fn_by_start)
+        elif prefix == "while":
+            while_commits = by_branch.get(merged, [])
+            condition = while_commits[0] if while_commits else None
+            body = _build_exec_nodes(while_commits[1:], by_branch, sha_to_branch, sha_to_commit, fn_by_start)
             if condition:
-                nodes.append(LoopNode(condition, body, commit))
+                nodes.append(WhileNode(condition, body, commit))
+
+        elif prefix == "for":
+            for_commits = by_branch.get(merged, [])
+            header = for_commits[0] if for_commits else None
+            body = _build_exec_nodes(for_commits[1:], by_branch, sha_to_branch, sha_to_commit, fn_by_start)
+            if header:
+                nodes.append(ForNode(header, body, commit))
 
         elif prefix == "check":
             branch_commits = by_branch.get(merged, [])
@@ -205,6 +221,14 @@ def _extract_condition(message: str) -> str:
     """Strip 'if '/'while ' keyword and trailing ':' from a condition message."""
     m = _CONDITION_RE.match(message.strip())
     return m.group(1).strip() if m else message.strip().rstrip(":")
+
+
+def _extract_for_header(message: str) -> tuple[str, str]:
+    """Extract (target, iterable) from a 'for X in Y:' message."""
+    m = _FOR_HEADER_RE.match(message.strip())
+    if not m:
+        return "", ""
+    return m.group(1).strip(), m.group(2).strip()
 
 
 def _extract_handler(message: str) -> str:
@@ -268,18 +292,41 @@ def _execute(nodes: list[ExecNode], scope: dict, snapshots: dict, errors: dict) 
                 merge_msg = node.else_merge.message if node.else_merge else ""
             _promote(branch_scope, scope, _parse_return(merge_msg))
 
-        elif isinstance(node, LoopNode):
+        elif isinstance(node, WhileNode):
             condition_expr = _extract_condition(node.condition.message)
-            loop_scope = scope.copy()
+            while_scope = scope.copy()
             return_vars = _parse_return(node.merge.message if node.merge else "")
-            for _ in range(_MAX_LOOP_ITERATIONS):
+            for _ in range(_MAX_WHILE_ITERATIONS):
                 try:
-                    if not bool(eval(condition_expr, loop_scope)):  # noqa: S307
+                    if not bool(eval(condition_expr, while_scope)):  # noqa: S307
                         break
                 except Exception:
                     break
-                _execute(node.body, loop_scope, snapshots, errors)
-            _promote(loop_scope, scope, return_vars)
+                _execute(node.body, while_scope, snapshots, errors)
+            _promote(while_scope, scope, return_vars)
+
+        elif isinstance(node, ForNode):
+            target, iter_expr = _extract_for_header(node.header.message)
+            for_scope = scope.copy()
+            return_vars = _parse_return(node.merge.message if node.merge else "")
+            if target and iter_expr:
+                try:
+                    iterable = eval(iter_expr, for_scope)  # noqa: S307
+                except Exception:
+                    iterable = []
+                count = 0
+                for item in iterable:
+                    if count >= _MAX_FOR_ITERATIONS:
+                        break
+                    count += 1
+                    for_scope["__cwg_iter_value"] = item
+                    try:
+                        exec(f"{target} = __cwg_iter_value", for_scope)  # noqa: S102
+                    except Exception:
+                        break
+                    _execute(node.body, for_scope, snapshots, errors)
+                for_scope.pop("__cwg_iter_value", None)
+            _promote(for_scope, scope, return_vars)
 
         elif isinstance(node, CheckChainNode):
             code = "\n".join(node.lines)
