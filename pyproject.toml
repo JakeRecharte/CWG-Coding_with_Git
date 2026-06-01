@@ -2,6 +2,8 @@
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+
+
 [project]
 name = "coding-with-git"
 version = "0.1.0"
@@ -9,8 +11,33 @@ description = "CWG — a Git-based programming language interpreter"
 requires-python = ">=3.10"
 dependencies = ["gitpython"]
 
+
+
 [tool.setuptools.packages.find]
 include = ["core*"]
+
+[tool.coverage.run]
+source = ["core"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "except ImportError",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+
 
 [project.scripts]
 cwg = "core.cli:main"

@@ -264,8 +264,42 @@ git merge while/fizzbuzz
 
 ## Installation
 
+### Prerequisites
+
+- Python 3.10 or newer
+- Git
+
+### Setup
+
+Clone the repo, create a virtual environment, and install CWG in editable mode:
+
 ```bash
-pip install -r requirements.txt
+git clone <repo-url>
+cd CWG-Coding_with_Git
+python3 -m venv .venv
+source .venv/bin/activate          # macOS / Linux
+# .venv\Scripts\activate           # Windows
+pip install -e .
+```
+
+The `pip install -e .` step installs CWG itself, makes the `cwg` command available on your `PATH`, and pulls in the runtime dependency (GitPython).
+
+To also run the test suite:
+
+```bash
+pip install pytest pytest-cov
+pytest
+```
+
+### Hello world
+
+```bash
+mkdir hello && cd hello
+git init
+git commit --allow-empty -m "message = 'hello world'"
+git commit --allow-empty -m "print(message)"
+cwg run .
+# output: hello world
 ```
 
 ---
