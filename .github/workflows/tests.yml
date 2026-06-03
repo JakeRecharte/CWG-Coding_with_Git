@@ -1,0 +1,23 @@
+# .github/workflows/tests.yml
+name: Tests
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                python-version: ["3.10", "3.11", "3.12"] # test all supported versions
+        steps:
+            - uses: actions/checkout@v4 # 1. grab your code
+
+            - uses: actions/setup-python@v5 # 2. install Python
+              with:
+                  python-version: ${{ matrix.python-version }}
+
+            - run: pip install -e . pytest # 3. install CWG + its deps + pytest
+
+            - run: pytest # 4. run the suite
