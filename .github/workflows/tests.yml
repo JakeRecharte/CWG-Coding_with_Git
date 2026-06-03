@@ -20,7 +20,7 @@ jobs:
         strategy:
             fail-fast: false # let every version finish so you see the full picture
             matrix:
-                python-version: ["3.10", "3.11", "3.12"] # test all supported versions
+                python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"] # test all supported versions
         steps:
             - uses: actions/checkout@v6 # 1. grab your code
 
