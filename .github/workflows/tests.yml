@@ -12,9 +12,9 @@ jobs:
             matrix:
                 python-version: ["3.10", "3.11", "3.12"] # test all supported versions
         steps:
-            - uses: actions/checkout@v4 # 1. grab your code
+            - uses: actions/checkout@v6 # 1. grab your code
 
-            - uses: actions/setup-python@v5 # 2. install Python
+            - uses: actions/setup-python@v6 # 2. install Python
               with:
                   python-version: ${{ matrix.python-version }}
 
