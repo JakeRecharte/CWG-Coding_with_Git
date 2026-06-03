@@ -1,13 +1,13 @@
 """
 Tests for core/cli.py — the top-level `cwg` command dispatcher.
 
-cli.main() is a thin router:
-  - `cwg run <target>`  → dispatches to runner.main()
-  - `cwg <anything else>` → dispatches to gpScraper.main()
-  - `cwg` (no args)     → dispatches to gpScraper.main() (defaults to cwd)
+cli.main() is a thin router with a single user-facing verb:
+  - `cwg run [target]` → dispatches to runner.main() (target optional)
+  - `cwg` (no args)    → prints usage, exits 0
+  - anything else      → prints usage, exits 2
 
 These tests verify the routing logic by patching sys.argv and monkeypatching
-the downstream main() functions to confirm which one was called.
+the downstream main() function to confirm dispatch.
 """
 
 import sys
@@ -60,64 +60,46 @@ class TestCliDispatch:
         assert "run" not in observed_argv[1:]
         assert "program.cwg" in observed_argv
 
-    def test_scrape_default_for_no_args(self, monkeypatch):
-        """With no args, cli should dispatch to scraper main."""
+    def test_run_with_no_target_dispatches_to_runner(self, monkeypatch):
+        """`cwg run` with no target still routes to runner (defaults to cwd)."""
         from core import cli
 
-        called = {"scraper": False, "runner": False}
-
-        def fake_scraper_main():
-            called["scraper"] = True
+        observed_argv = []
 
         def fake_runner_main():
-            called["runner"] = True
+            observed_argv.extend(sys.argv)
 
-        monkeypatch.setattr("core.gpScraper.main", fake_scraper_main)
         monkeypatch.setattr("core.runner.main", fake_runner_main)
+        monkeypatch.setattr(sys, "argv", ["cwg", "run"])
+
+        cli.main()
+
+        assert observed_argv  # runner was reached
+        assert "run" not in observed_argv[1:]
+
+    def test_no_args_prints_usage_and_exits_zero(self, monkeypatch, capsys):
+        """Bare `cwg` prints usage and exits 0 — no work performed."""
+        from core import cli
+
+        monkeypatch.setattr("core.runner.main", lambda: pytest.fail("runner should not run"))
         monkeypatch.setattr(sys, "argv", ["cwg"])
 
-        cli.main()
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main()
+        assert exc_info.value.code == 0
+        assert "usage: cwg run" in capsys.readouterr().err
 
-        assert called["scraper"] is True
-        assert called["runner"] is False
-
-    def test_scrape_explicit_subcommand_routes_to_scraper(self, monkeypatch):
-        """`cwg scrape <path>` should reach scraper main (it's not 'run')."""
+    def test_unknown_verb_prints_usage_and_exits_two(self, monkeypatch, capsys):
+        """An unrecognized verb (e.g. the old `scrape`) is rejected with exit 2."""
         from core import cli
 
-        called = {"scraper": False, "runner": False}
-
-        def fake_scraper_main():
-            called["scraper"] = True
-
-        def fake_runner_main():
-            called["runner"] = True
-
-        monkeypatch.setattr("core.gpScraper.main", fake_scraper_main)
-        monkeypatch.setattr("core.runner.main", fake_runner_main)
+        monkeypatch.setattr("core.runner.main", lambda: pytest.fail("runner should not run"))
         monkeypatch.setattr(sys, "argv", ["cwg", "scrape", "/some/repo"])
 
-        cli.main()
-
-        assert called["scraper"] is True
-        assert called["runner"] is False
-
-    def test_path_as_first_arg_routes_to_scraper(self, monkeypatch):
-        """A bare path (not 'run') goes to scraper — its default verb."""
-        from core import cli
-
-        called = {"scraper": False}
-
-        def fake_scraper_main():
-            called["scraper"] = True
-
-        monkeypatch.setattr("core.gpScraper.main", fake_scraper_main)
-        monkeypatch.setattr("core.runner.main", lambda: pytest.fail("runner should not run"))
-        monkeypatch.setattr(sys, "argv", ["cwg", "/path/to/repo"])
-
-        cli.main()
-
-        assert called["scraper"] is True
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main()
+        assert exc_info.value.code == 2
+        assert "usage: cwg run" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
@@ -153,16 +135,25 @@ class TestCliEndToEnd:
             cli.main()
         assert exc_info.value.code == 1
 
-    def test_scrape_against_real_repo(self, monkeypatch, tmp_git_repo, capsys):
-        """`cwg <repo>` should print the scrape summary."""
+    def test_run_against_real_repo(self, monkeypatch, tmp_git_repo, capsys):
+        """`cwg run <repo>` executes the repo's git history through the interpreter."""
         from core import cli
 
-        tmp_git_repo.git.commit("--allow-empty", "-m", "x = 5")
-        monkeypatch.setattr(sys, "argv", ["cwg", tmp_git_repo.working_dir])
+        tmp_git_repo.git.commit("--allow-empty", "-m", "print('from repo')")
+        monkeypatch.setattr(sys, "argv", ["cwg", "run", tmp_git_repo.working_dir])
 
         cli.main()
 
-        out = capsys.readouterr().out
-        assert "branches" in out
-        assert "commits" in out
-        assert "x = 5" in out
+        assert "from repo" in capsys.readouterr().out
+
+    def test_run_no_target_defaults_to_current_repo(self, monkeypatch, tmp_git_repo, capsys):
+        """`cwg run` with no target runs the git history of the current directory."""
+        from core import cli
+
+        tmp_git_repo.git.commit("--allow-empty", "-m", "print('current repo')")
+        monkeypatch.chdir(tmp_git_repo.working_dir)
+        monkeypatch.setattr(sys, "argv", ["cwg", "run"])
+
+        cli.main()
+
+        assert "current repo" in capsys.readouterr().out

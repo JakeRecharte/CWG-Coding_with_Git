@@ -145,13 +145,19 @@ def main() -> None:
     )
     parser.add_argument(
         "target",
-        help=".cwg file path, local git repo path, or remote URL (https://…)",
+        nargs="?",
+        default=".",
+        help="GitHub repo URL or .cwg file; omit to run the current repo's "
+             "git history",
     )
     args = parser.parse_args()
 
     target = args.target
     if not (_URL_RE.match(target) or _is_git_repo(target) or Path(target).exists()):
         print(f"error: not found: {target}", file=sys.stderr)
+        sys.exit(1)
+    if Path(target).is_dir() and not _is_git_repo(target):
+        print(f"error: not a git repository: {target}", file=sys.stderr)
         sys.exit(1)
 
     run_file(target)
