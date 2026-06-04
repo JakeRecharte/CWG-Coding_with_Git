@@ -9,13 +9,7 @@
 
 ### Local Setup
 
-Install the runtime dependency (`gitpython`):
-
-```bash
-pip install -r requirements.txt
-```
-
-For development, prefer an editable install (next section) so the `cwg` console script is wired up.
+Dependencies (`gitpython`) are declared in `pyproject.toml`, so an editable install pulls them in automatically. Prefer the editable install (next section) so the `cwg` console script is also wired up.
 
 ### Building from Source
 

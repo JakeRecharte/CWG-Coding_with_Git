@@ -9,7 +9,7 @@ name = "coding-with-git"
 version = "0.1.0"
 description = "CWG — a Git-based programming language interpreter"
 requires-python = ">=3.10"
-dependencies = ["gitpython"]
+dependencies = ["gitpython>=3,<4"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
