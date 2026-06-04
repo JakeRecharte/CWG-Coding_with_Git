@@ -1,6 +1,0 @@
-[submodule "CWGApp"]
-	path = CWGApp
-	url = https://github.com/dominicvicente31/CWGApp.git
-[submodule "testFunctions"]
-	path = testFunctions
-	url = https://github.com/dominicvicente31/testFunctions.git
