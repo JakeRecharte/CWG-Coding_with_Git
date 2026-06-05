@@ -1,5 +1,5 @@
 """
-Tests for core/gpScraper.py — the git → GpScrapeResult layer.
+Tests for cwg/gpScraper.py — the git → GpScrapeResult layer.
 
 These tests build small real git repos in tempdirs (via the tmp_git_repo
 fixture) and exercise scrape() end-to-end. They also cover internal helpers
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from core.gpScraper import (
+from cwg.gpScraper import (
     scrape,
     CommitNode,
     GpScrapeResult,
@@ -434,14 +434,14 @@ class TestScrapeInterpretRoundTrip:
     """Build a git repo, scrape it, run the interpreter, check the scope."""
 
     def test_simple_program(self, tmp_git_repo):
-        from core.interpreter import run as interp_run
+        from cwg.interpreter import run as interp_run
         _commit(tmp_git_repo, "x = 5")
         _commit(tmp_git_repo, "y = x * 2")
         scope = interp_run(scrape(tmp_git_repo.working_dir))
         assert scope["y"] == 10
 
     def test_while_loop_program(self, tmp_git_repo):
-        from core.interpreter import run as interp_run
+        from cwg.interpreter import run as interp_run
         _commit(tmp_git_repo, "i = 3")
         _new_branch(tmp_git_repo, "while/down")
         _commit(tmp_git_repo, "while i > 0:")
@@ -453,7 +453,7 @@ class TestScrapeInterpretRoundTrip:
         assert scope["i"] == 0
 
     def test_for_loop_program(self, tmp_git_repo):
-        from core.interpreter import run as interp_run
+        from cwg.interpreter import run as interp_run
         _commit(tmp_git_repo, "total = 0")
         _new_branch(tmp_git_repo, "for/sum")
         _commit(tmp_git_repo, "for i in [1, 2, 3, 4]:")

@@ -1,5 +1,5 @@
 """
-Tests for core/cli.py — the top-level `cwg` command dispatcher.
+Tests for cwg/cli.py — the top-level `cwg` command dispatcher.
 
 cli.main() is a thin router with a single user-facing verb:
   - `cwg run [target]` → dispatches to runner.main() (target optional)
@@ -22,7 +22,7 @@ import pytest
 class TestCliDispatch:
     def test_run_subcommand_routes_to_runner(self, monkeypatch, tmp_path):
         """When invoked as `cwg run X`, runner.main() should be called."""
-        from core import cli
+        from cwg import cli
 
         called = {"runner": False, "scraper": False, "argv_seen": None}
 
@@ -33,8 +33,8 @@ class TestCliDispatch:
         def fake_scraper_main():
             called["scraper"] = True
 
-        monkeypatch.setattr("core.runner.main", fake_runner_main)
-        monkeypatch.setattr("core.gpScraper.main", fake_scraper_main)
+        monkeypatch.setattr("cwg.runner.main", fake_runner_main)
+        monkeypatch.setattr("cwg.gpScraper.main", fake_scraper_main)
         monkeypatch.setattr(sys, "argv", ["cwg", "run", "program.cwg"])
 
         cli.main()
@@ -44,14 +44,14 @@ class TestCliDispatch:
 
     def test_run_subcommand_strips_run_from_argv(self, monkeypatch):
         """After dispatch, runner.main() should see argv with 'run' removed."""
-        from core import cli
+        from cwg import cli
 
         observed_argv = []
 
         def fake_runner_main():
             observed_argv.extend(sys.argv)
 
-        monkeypatch.setattr("core.runner.main", fake_runner_main)
+        monkeypatch.setattr("cwg.runner.main", fake_runner_main)
         monkeypatch.setattr(sys, "argv", ["cwg", "run", "program.cwg"])
 
         cli.main()
@@ -62,14 +62,14 @@ class TestCliDispatch:
 
     def test_run_with_no_target_dispatches_to_runner(self, monkeypatch):
         """`cwg run` with no target still routes to runner (defaults to cwd)."""
-        from core import cli
+        from cwg import cli
 
         observed_argv = []
 
         def fake_runner_main():
             observed_argv.extend(sys.argv)
 
-        monkeypatch.setattr("core.runner.main", fake_runner_main)
+        monkeypatch.setattr("cwg.runner.main", fake_runner_main)
         monkeypatch.setattr(sys, "argv", ["cwg", "run"])
 
         cli.main()
@@ -79,9 +79,9 @@ class TestCliDispatch:
 
     def test_no_args_prints_usage_and_exits_zero(self, monkeypatch, capsys):
         """Bare `cwg` prints usage and exits 0 — no work performed."""
-        from core import cli
+        from cwg import cli
 
-        monkeypatch.setattr("core.runner.main", lambda: pytest.fail("runner should not run"))
+        monkeypatch.setattr("cwg.runner.main", lambda: pytest.fail("runner should not run"))
         monkeypatch.setattr(sys, "argv", ["cwg"])
 
         with pytest.raises(SystemExit) as exc_info:
@@ -91,9 +91,9 @@ class TestCliDispatch:
 
     def test_unknown_verb_prints_usage_and_exits_two(self, monkeypatch, capsys):
         """An unrecognized verb (e.g. the old `scrape`) is rejected with exit 2."""
-        from core import cli
+        from cwg import cli
 
-        monkeypatch.setattr("core.runner.main", lambda: pytest.fail("runner should not run"))
+        monkeypatch.setattr("cwg.runner.main", lambda: pytest.fail("runner should not run"))
         monkeypatch.setattr(sys, "argv", ["cwg", "scrape", "/some/repo"])
 
         with pytest.raises(SystemExit) as exc_info:
@@ -111,7 +111,7 @@ class TestCliEndToEnd:
 
     def test_run_subcommand_executes_cwg_file(self, monkeypatch, tmp_path):
         """`cwg run hello.cwg` should produce program output via the interpreter."""
-        from core import cli
+        from cwg import cli
 
         cwg_file = tmp_path / "hello.cwg"
         cwg_file.write_text('\n'.join([
@@ -127,7 +127,7 @@ class TestCliEndToEnd:
 
     def test_run_subcommand_missing_file_exits_nonzero(self, monkeypatch, tmp_path):
         """`cwg run nonexistent` should exit with status 1."""
-        from core import cli
+        from cwg import cli
 
         monkeypatch.setattr(sys, "argv", ["cwg", "run", str(tmp_path / "missing.cwg")])
 
@@ -137,7 +137,7 @@ class TestCliEndToEnd:
 
     def test_run_against_real_repo(self, monkeypatch, tmp_git_repo, capsys):
         """`cwg run <repo>` executes the repo's git history through the interpreter."""
-        from core import cli
+        from cwg import cli
 
         tmp_git_repo.git.commit("--allow-empty", "-m", "print('from repo')")
         monkeypatch.setattr(sys, "argv", ["cwg", "run", tmp_git_repo.working_dir])
@@ -148,7 +148,7 @@ class TestCliEndToEnd:
 
     def test_run_no_target_defaults_to_current_repo(self, monkeypatch, tmp_git_repo, capsys):
         """`cwg run` with no target runs the git history of the current directory."""
-        from core import cli
+        from cwg import cli
 
         tmp_git_repo.git.commit("--allow-empty", "-m", "print('current repo')")
         monkeypatch.chdir(tmp_git_repo.working_dir)

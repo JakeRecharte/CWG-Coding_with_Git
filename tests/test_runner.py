@@ -1,5 +1,5 @@
 """
-Tests for core/runner.py — the .cwg file parser and run_file dispatcher.
+Tests for cwg/runner.py — the .cwg file parser and run_file dispatcher.
 
 These tests cover three concerns:
   1. CWGRunner.load() correctly parses .cwg files into CommitNode graphs
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from core.runner import CWGRunner, run_file, _is_git_repo, _URL_RE, main as runner_main
+from cwg.runner import CWGRunner, run_file, _is_git_repo, _URL_RE, main as runner_main
 
 
 # ---------------------------------------------------------------------------
@@ -223,8 +223,8 @@ class TestRunFileEndToEnd:
             'git commit -m "z = y + 1"',
         ]))
         # run_file calls run() which returns the final scope
-        from core.runner import CWGRunner
-        from core.interpreter import run as interp_run
+        from cwg.runner import CWGRunner
+        from cwg.interpreter import run as interp_run
         scope = interp_run(CWGRunner().load(path))
         assert scope["z"] == 11
 
@@ -242,8 +242,8 @@ class TestRunFileEndToEnd:
             'git merge if/big -m "return result"',
             'git merge else/small -m "return result"',
         ]))
-        from core.runner import CWGRunner
-        from core.interpreter import run as interp_run
+        from cwg.runner import CWGRunner
+        from cwg.interpreter import run as interp_run
         scope = interp_run(CWGRunner().load(path))
         assert scope["result"] == 1
 
@@ -257,8 +257,8 @@ class TestRunFileEndToEnd:
             'git checkout main',
             'git merge while/down -m "return i"',
         ]))
-        from core.runner import CWGRunner
-        from core.interpreter import run as interp_run
+        from cwg.runner import CWGRunner
+        from cwg.interpreter import run as interp_run
         scope = interp_run(CWGRunner().load(path))
         assert scope["i"] == 0
 
@@ -271,8 +271,8 @@ class TestRunFileDispatch:
     def test_local_git_repo_routes_to_scrape(self, tmp_git_repo):
         # Commit something so scrape() has data to work with
         tmp_git_repo.git.commit("--allow-empty", "-m", "x = 42")
-        from core.interpreter import run as interp_run
-        from core.gpScraper import scrape
+        from cwg.interpreter import run as interp_run
+        from cwg.gpScraper import scrape
         # run_file should produce the same final scope as direct scrape+run
         result_via_run_file = run_file(tmp_git_repo.working_dir)
         result_direct = interp_run(scrape(tmp_git_repo.working_dir))
