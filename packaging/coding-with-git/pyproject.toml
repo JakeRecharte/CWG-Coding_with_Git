@@ -1,0 +1,22 @@
+# Defensive name placeholder for PyPI. The real project is `cwg`.
+# Build and upload from this directory:
+#   python -m build && twine upload dist/*
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coding-with-git"
+version = "0.0.1"
+description = "Name placeholder — the real project is published as `cwg` (pip install cwg)."
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = ">=3.10"
+classifiers = ["Development Status :: 7 - Inactive"]
+
+[project.urls]
+Homepage = "https://pypi.org/project/cwg/"
+
+# Metadata-only distribution: no importable code to discover.
+[tool.setuptools]
+py-modules = []
