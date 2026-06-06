@@ -1,8 +1,4 @@
-<img 
-src="assets/logo_banner.png" 
-alt="CWG banner" 
-width="1622" height="669"
->
+<img src="assets/logo_banner.png" alt="CWG banner" width="1622" height="669">
 # Coding With Git
 
 > **Work in progress.** This project is in early draft stage. Syntax and semantics are subject to change.
