@@ -37,7 +37,7 @@ _URL_RE = re.compile(r"^(https?://|git@|ssh://)", re.I)
 _CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{7,40})\)", re.I)
 _REVERT_SHA_RE = re.compile(r"This reverts commit ([0-9a-f]{7,40})\.", re.I)
 _FN_START_RE = re.compile(r"^fn/(.+)$")
-_FN_END_RE = re.compile(r"^end-fn/(.+)$|^end-(.+)$")
+_FN_END_RE = re.compile(r"^end-fn/(.+)$")
 _STASH_RE = re.compile(r"stash@\{(\d+)\}: (.+)")
 
 
@@ -190,7 +190,7 @@ def _read_stash(repo: Repo) -> list[StashEntry]:
 
 def _extract_functions(repo: Repo, tag_map: dict[str, str]) -> list[FunctionDef]:
     """
-    Find fn/<name> / end-fn/<name> (or end-<name>) tag pairs and collect
+    Find fn/<name> / end-fn/<name> tag pairs and collect
     the commits that form the function body.
     """
     starts: dict[str, tuple[str, str]] = {}  # fn_name → (tag, sha)
@@ -203,9 +203,7 @@ def _extract_functions(repo: Repo, tag_map: dict[str, str]) -> list[FunctionDef]
             continue
         m = _FN_END_RE.match(tag_name)
         if m:
-            fn_name = m.group(1) or m.group(2)
-            if fn_name:
-                ends[fn_name] = (tag_name, sha)
+            ends[m.group(1)] = (tag_name, sha)
 
     functions: list[FunctionDef] = []
     for fn_name, (_, start_sha) in starts.items():
