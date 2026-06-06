@@ -1,6 +1,8 @@
 <img src="https://raw.githubusercontent.com/JakeRecharte/CWG-Coding_with_Git/main/docs/assets/logo_banner.png" alt="CWG banner" width="1622" height="669">
 # Coding With Git
 
+[![Python versions](https://img.shields.io/pypi/pyversions/cwg)](https://pypi.org/project/cwg/)
+
 > **Work in progress.** This project is in early draft stage. Syntax and semantics are subject to change.
 
 CWG is a programming language where the source code *is* the git history. Commit messages are statements, branches are control flow blocks, and merges close those blocks. The interpreter walks the commit DAG and executes it as a program.
