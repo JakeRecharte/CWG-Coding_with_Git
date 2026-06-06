@@ -1,4 +1,4 @@
-<img src="assets/logo_banner.png" alt="CWG banner" width="1622" height="669">
+<img src="https://raw.githubusercontent.com/JakeRecharte/CWG-Coding_with_Git/main/docs/assets/logo_banner.png" alt="CWG banner" width="1622" height="669">
 # Coding With Git
 
 > **Work in progress.** This project is in early draft stage. Syntax and semantics are subject to change.
