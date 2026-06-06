@@ -1,6 +1,4 @@
-<img width="1622" height="669" alt="image" src="https://github.com/user-attachments/assets/1c015b26-30bf-4f6b-9023-d2ba5ccc7714" />
-
-
+<img src="https://raw.githubusercontent.com/JakeRecharte/CWG-Coding_with_Git/main/docs/assets/logo_banner.png" alt="CWG banner" width="1622" height="669">
 # Coding With Git
 
 > **Work in progress.** This project is in early draft stage. Syntax and semantics are subject to change.
@@ -306,4 +304,4 @@ cwg run .
 
 ## Status
 
-This project is a work in progress. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get involved.
+This project is a work in progress. See [CONTRIBUTING.md](https://github.com/JakeRecharte/CWG-Coding_with_Git/blob/main/docs/CONTRIBUTING.md) for how to get involved.
