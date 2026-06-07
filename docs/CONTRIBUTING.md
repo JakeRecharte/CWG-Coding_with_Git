@@ -93,12 +93,23 @@ Tests construct `CommitNode` / `GpScrapeResult` objects directly — no real git
 - Follow existing CWG command voice and terminology — match the vocabulary used in `README.md` (commit = statement, branch = block, merge = close-block, tag = function, cherry-pick = call, revert = undo / exception handler)
 - Match output patterns of existing commands; do not introduce new flag styles without updating `cwg/cli.py` and `cwg/runner.py` together
 
+## Continuous Integration
+
+Every Pull Request (and push to `main`) runs the test suite via
+[`tests.yml`](../.github/workflows/tests.yml) across all supported Python
+versions (3.10–3.14). CI must pass before a PR is merged.
+
+[Dependabot](../.github/dependabot.yml) opens weekly PRs to keep the Python
+dependencies and GitHub Actions up to date.
+
 ## Security Checks
 
-Pull Requests and pushes to `main` run automated security checks: 
+Pull Requests run automated dependency security checks via
+[`security.yml`](../.github/workflows/security.yml):
 
-- **Dependency review** — flags new dependencies with known vulnerabilities (PRs only)
-- **Trivy scanning** — scans the repo filesystem and Docker image for vulnerabilities and misconfigurations
-- **Config security** — scans Docker Compose and deployment configs for unsafe exposure (e.g., auth disabled with public port bindings, `0.0.0.0` bindings). Local-only configs that bind to `127.0.0.1` are allowed.
+- **Dependency review** — flags any dependency a PR adds or bumps to a version with a known vulnerability (PRs only).
+- **pip-audit** — audits the project's declared dependencies against the [PyPA Advisory Database](https://github.com/pypa/advisory-database). Also runs on a weekly schedule so newly disclosed vulnerabilities are caught even when dependencies aren't changing.
 
-All checks fail on CRITICAL or HIGH severity findings. If a check fails on your PR, inspect the output and either fix the vulnerability or document why it's a false positive.
+Dependency review fails on HIGH or CRITICAL findings; pip-audit fails on any
+known vulnerability. If a check fails on your PR, inspect the output and either
+update the dependency or document why it's a false positive.
