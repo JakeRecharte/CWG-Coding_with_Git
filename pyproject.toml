@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cwg"
-version = "0.1.0"
+version = "0.2.0"
 description = "CWG — a Git-based programming language interpreter"
 readme = "docs/README.md"
 license = "GPL-3.0-only"
