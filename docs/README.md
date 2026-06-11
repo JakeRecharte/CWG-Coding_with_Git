@@ -2,12 +2,13 @@
 
 # Coding With Git
 
-[![PyPI](https://img.shields.io/pypi/v/cwg)](https://pypi.org/project/cwg/)
-[![Python versions](https://img.shields.io/pypi/pyversions/cwg)](https://pypi.org/project/cwg/)
+[![PyPI](https://img.shields.io/pypi/v/cwg?cache=2)](https://pypi.org/project/cwg/)
+[![Python versions](https://img.shields.io/pypi/pyversions/cwg?cache=2)](https://pypi.org/project/cwg/)
 [![License: GPL v3](https://img.shields.io/pypi/l/cwg)](https://github.com/JakeRecharte/CWG-Coding_with_Git/blob/main/docs/LICENSE)
 
 **[Language Reference](https://github.com/JakeRecharte/CWG-Coding_with_Git/blob/main/docs/LANGUAGE.md)** ·
 [Installation](#installation) ·
+[FAQ](https://github.com/JakeRecharte/CWG-Coding_with_Git/wiki) ·
 [Contributing](https://github.com/JakeRecharte/CWG-Coding_with_Git/blob/main/docs/CONTRIBUTING.md) ·
 [License](https://github.com/JakeRecharte/CWG-Coding_with_Git/blob/main/docs/LICENSE)
 
