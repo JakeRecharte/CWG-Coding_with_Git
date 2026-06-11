@@ -8,6 +8,7 @@
 
 **[Language Reference](https://github.com/JakeRecharte/CWG-Coding_with_Git/blob/main/docs/LANGUAGE.md)** ·
 [Installation](#installation) ·
+[FAQ](https://github.com/JakeRecharte/CWG-Coding_with_Git/wiki) ·
 [Contributing](https://github.com/JakeRecharte/CWG-Coding_with_Git/blob/main/docs/CONTRIBUTING.md) ·
 [License](https://github.com/JakeRecharte/CWG-Coding_with_Git/blob/main/docs/LICENSE)
 
