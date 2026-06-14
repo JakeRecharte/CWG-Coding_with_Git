@@ -26,3 +26,6 @@ ENV/
 # Editors / IDEs
 .vscode/
 .idea/
+
+# Claude Code
+CLAUDE.md
