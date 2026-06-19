@@ -6,87 +6,20 @@ full reference.
 
 ## Contents
 
-- [Syntax](#syntax)
+- [Syntax](https://github.com/JakeRecharte/CWG-Coding_with_Git/wiki/Syntax)
 - [Branch Naming Conventions](#branch-naming-conventions)
 - [Scoping](#scoping)
 - [Execution Model](#execution-model)
 - [Merging](#merging)
 - [Revert and Exception Handling](#revert-and-exception-handling)
-- [Sample Programs](#sample-programs)
+- [Sample Programs](https://github.com/JakeRecharte/CWG-Coding_with_Git/wiki/Examples)
 - [Data Types](#data-types)
 
 ---
 
 ## Syntax
 
-CWG executes Python syntax inside commit messages. Commit messages must be valid Python statements for the interpreter to recognize and run them.
-
-### Variables, int, string, bool, int operator
-
-```bash
-git commit -m "x = 5"
-git commit -m "name = 'world'"
-git commit -m "active = True"
-git commit -m "x = x + 1"
-```
-
-### If / Else
-
-Branches named `if/<name>` and `else/<name>` define conditional blocks. The condition is the first commit of the `if/` branch.
-
-```bash
-git branch if/large
-  git commit -m "if x > 10:"
-  git commit -m "    print('x is large')"
-git checkout main
-git branch else/small
-  git commit -m "    print('x is small')"
-git checkout main
-git merge if/large
-git merge else/small
-```
-
-### While Loops
-
-Branches named `while/<name>` define while loops. The first commit in the branch is the `while` condition.
-
-```bash
-git commit -m "i = 10"
-git branch while/countdown
-  git commit -m "while i > 0:"
-  git commit -m "    print(i)"
-  git commit -m "    i = i - 1"
-git checkout main
-git merge while/countdown
-git commit -m "print('blastoff')"
-```
-
-### For Loops
-
-Branches named `for/<name>` define for loops. The first commit in the branch is the `for` header — both `for x in iterable:` and tuple-unpacking forms like `for x, y in pairs:` are supported.
-
-```bash
-git commit -m "total = 0"
-git branch for/sum
-  git commit -m "for i in [1, 2, 3, 4, 5]:"
-  git commit -m "    total = total + i"
-git checkout main
-git merge for/sum -m "return total"
-```
-
-### Functions
-
-Functions are defined as tagged commit ranges and called via `cherry-pick`.
-
-```bash
-git tag -a "fn/greet"
-git commit -m "    print('hello ' + name)"
-git commit -m "    return"
-git tag -a "end-fn/greet"
-
-# call the function
-git cherry-pick fn/greet
-```
+The syntax reference now lives on the wiki: **[Syntax](https://github.com/JakeRecharte/CWG-Coding_with_Git/wiki/Syntax)**.
 
 ---
 
@@ -187,57 +120,7 @@ CWG detects reverts by the auto-generated `This reverts commit <sha>.` line that
 
 ## Sample Programs
 
-### Hello World
-
-```bash
-git init hello-world
-git commit -m "message = 'hello world'"
-git commit -m "print(message)"
-# output: hello world
-```
-
-### Countdown
-
-```bash
-git init countdown
-git commit -m "i = 10"
-git branch while/countdown
-  git commit -m "while i > 0:"
-  git commit -m "    print(i)"
-  git commit -m "    i = i - 1"
-git checkout main
-git merge while/countdown
-git commit -m "print('blastoff')"
-# output: 10 9 8 7 6 5 4 3 2 1 blastoff
-```
-
-### FizzBuzz
-
-```bash
-git init fizzbuzz
-git commit -m "i = 1"
-git branch while/fizzbuzz
-  git commit -m "while i <= 20:"
-  git branch check/fizzbuzz
-    git commit -m "    if i % 15 == 0: print('FizzBuzz')"
-  git checkout while/fizzbuzz
-  git merge check/fizzbuzz
-  git branch check/fizz
-    git commit -m "    elif i % 3 == 0: print('Fizz')"
-  git checkout while/fizzbuzz
-  git merge check/fizz
-  git branch check/buzz
-    git commit -m "    elif i % 5 == 0: print('Buzz')"
-  git checkout while/fizzbuzz
-  git merge check/buzz
-  git branch check/default
-    git commit -m "    else: print(i)"
-  git checkout while/fizzbuzz
-  git merge check/default
-  git commit -m "    i = i + 1"
-git checkout main
-git merge while/fizzbuzz
-```
+A gallery of complete programs now lives on the wiki: **[Examples](https://github.com/JakeRecharte/CWG-Coding_with_Git/wiki/Examples)**.
 
 ---
 
