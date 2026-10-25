@@ -24,7 +24,7 @@ jobs:
         steps:
             - uses: actions/checkout@v7 # 1. grab your code
 
-            - uses: actions/setup-python@v6 # 2. install Python
+            - uses: actions/setup-python@v7 # 2. install Python
               with:
                   python-version: ${{ matrix.python-version }}
                   cache: pip # cache downloaded packages between runs
