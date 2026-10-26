@@ -265,7 +265,11 @@ def scrape(repo_path: str, require_cwg: bool = False) -> GpScrapeResult:
             _checkout_all_remote_branches(repo)
         except GitCommandError as exc:
             shutil.rmtree(tmp_dir, ignore_errors=True)
-            raise ValueError(f"could not clone {repo_path!r}: {exc}") from exc
+            raise ValueError(
+                f"could not clone {repo_path!r}: {exc}\n"
+                "hint: private repos aren't supported by URL — clone it and run "
+                "`cwg run` from inside the repo"
+            ) from exc
     else:
         try:
             repo = Repo(repo_path, search_parent_directories=True)
