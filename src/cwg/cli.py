@@ -2,14 +2,14 @@
 CWG command-line dispatcher.
 
   cwg run [target]   — execute a CWG program
-                       target = GitHub URL or .cwg file; empty = current repo
+                       target = remote git repo https/SSH URL or .cwg file; empty = current repo
 """
 
 import sys
 
 _USAGE = (
     "usage: cwg run [target]\n"
-    "  target  GitHub repo URL or .cwg file; omit to run the current repo's "
+    "  target  remote git repo https/SSH URL or .cwg file; omit to run the current repo's "
     "git history"
 )
 

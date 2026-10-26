@@ -147,7 +147,7 @@ def main() -> None:
         "target",
         nargs="?",
         default=".",
-        help="GitHub repo URL or .cwg file; omit to run the current repo's "
+        help="remote git repo https/SSH URL or .cwg file; omit to run the current repo's "
              "git history",
     )
     args = parser.parse_args()
