@@ -64,6 +64,10 @@ cwg run .
 
 `cwg run` accepts a `.cwg` script, a local git repo path, or a remote URL (`https://…`, `git@…`, `ssh://…`).
 
+> **Private repos:** running by URL is intended for **public repos**. CWG does no credential handling of its own, so
+> a private URL only clones if your git is already authenticated (SSH key or credential helper). To run a private repo,
+> clone it yourself and run `cwg run` from inside it (or pass its local path).
+
 ---
 
 ## Language Reference
